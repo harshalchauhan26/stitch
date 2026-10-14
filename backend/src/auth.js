@@ -1,7 +1,11 @@
 // Password hashing (scrypt) + signed tokens (HS256 JWT) using only node:crypto. No extra dependencies.
 import crypto from 'node:crypto';
 
-const secret = () => process.env.JWT_SECRET || 'dev-secret-change-me-in-production';
+const secret = () => {
+  if (process.env.JWT_SECRET) return process.env.JWT_SECRET;
+  if (process.env.NODE_ENV === 'production') throw new Error('JWT_SECRET is not set');   // never sign tokens with the development default
+  return 'dev-secret-change-me-in-production';
+};
 const b64 = (v) => Buffer.from(v).toString('base64url');
 
 export function hashPassword(pw) {

@@ -23,7 +23,7 @@ export default function Login() {
         <input className="inp" type="password" placeholder="Password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
         {error && <span className="err-t">{error}</span>}
         <button className="btn pri" type="submit" disabled={busy || !email || !password} style={{ justifyContent: 'center' }}>{busy ? 'Signing in…' : 'Sign in'}</button>
-        {import.meta.env.DEV && <span className="mut" style={{ fontSize: 11 }}>Demo: priya@stitch.test / admin@stitch.test, password stitch123</span>}
+        {import.meta.env.DEV && <span className="mut" style={{ fontSize: 11 }}>First run on a new database: admin@stitch.test / stitch123. Change it in Settings → People.</span>}
       </form>
     </div>
   );

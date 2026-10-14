@@ -1,8 +1,8 @@
-// Seeds the same 18 people / 30 gaps shown in the design. Dates are offsets from "today" so the demo never goes stale.
-//DEMO DATA
+// seedBase(): a clean company for real use.  seed(): the DEMO data (fake brands, people, 27 records, 30 gaps) used by the tests and `npm run seed:demo`.
+// Demo dates are offsets from "today" so the demo never goes stale.
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { DEFAULT_RULES, stagesOf } from './catalogue.js';
+import { DEFAULT_RULES, FIELDS, stagesOf } from './catalogue.js';
 import { hashPassword } from './auth.js';
 import { isoInDays } from './lib.js';
 import { openDb } from './db.js';
@@ -56,10 +56,25 @@ const ORDERS = [
 ];
 
 const SAMPLE = {
+  email: 'customer@example.com', height: "5 ft 6 in",
   country: 'India', product: 'Bridal lehenga', neckline: 'Sweetheart', lining_colour: 'Ivory', blouse_size: 'Custom', garment_size: 'M',
   surcharge: 4500, dupatta_border: 'Gota patti', waist: 30, hip: 38, delivery_address: '12 Park Lane, Pune 411001', payment_link_sent: 'Yes',
   embroidery_colour: 'Antique gold', customer_sign_off: 'Yes', customer_approval: 'Yes', balance_payment: 'Paid', address_confirmed: 'Yes', tracking_shared: 'Yes',
 };
+
+// A believable value for any catalogue field, so demo records only have the gaps we leave on purpose.
+function sampleFor(key, now) {
+  if (SAMPLE[key] !== undefined) return SAMPLE[key];
+  const d = FIELDS[key];
+  if (!d) return undefined;
+  if (d.doneValues) return d.doneValues[0];
+  if (d.options) return d.options[0];
+  if (d.type === 'date') return isoInDays(20, now);
+  if (d.type === 'currency') return 2500;
+  if (d.type === 'number') return 20;
+  if (d.type === 'url') return 'https://example.com/template';
+  return 'Sample';
+}
 
 function buildFields(type, brand, stage, value, missing, extra, ruleRows, now, idx) {
   const f = { phone: `+91 98${String(10000000 + idx * 7919).slice(0, 8)}`, whatsapp_consent: 'Yes', last_contacted: isoInDays(-(1 + (idx % 3)), now) };
@@ -67,7 +82,7 @@ function buildFields(type, brand, stage, value, missing, extra, ruleRows, now, i
   for (const r of ruleRows) {
     if (r.record_type !== type || r.brand !== brand || stages.indexOf(r.stage) > upto) continue;
     if (missing.includes(r.field) || r.field === 'event_date') continue;
-    f[r.field] = r.field === 'promised_ship_date' ? isoInDays(25, now) : r.field === 'advance_amount' ? Math.round((value || 0) / 2) : SAMPLE[r.field];
+    f[r.field] = r.field === 'promised_ship_date' ? isoInDays(25, now) : r.field === 'advance_amount' ? Math.round((value || 0) / 2) : sampleFor(r.field, now);
   }
   if (value && !missing.includes('advance_amount')) f.advance_amount = Math.round(value / 2);
   if (extra.courier) { f.courier = extra.courier; f.arrival_date = isoInDays(extra.arrival, now); f.tracking_link = 'https://track.example/' + idx; }
@@ -129,12 +144,27 @@ export function seed(db, now = new Date()) {
   })();
 }
 
-export function seedIfEmpty(db) {
-  if (db.prepare('SELECT COUNT(*) n FROM tenants').get().n === 0) { seed(db); console.log(`Seeded demo data. Login: admin@stitch.test / priya@stitch.test / ... password: ${DEMO_PASSWORD}`); }
+/** A clean start for real use: one company, one admin, NO brands and NO fake records.
+ *  The admin adds the real brands, teams and people in Settings. */
+export function seedBase(db, { email = 'admin@stitch.test', password = DEMO_PASSWORD } = {}) {
+  db.transaction(() => {
+    db.prepare('INSERT INTO tenants (id, name, slug) VALUES (?,?,?)').run(T1.id, 'My Company', 'main');
+    db.prepare('INSERT INTO users (id, tenant_id, name, initials, email, password_hash, role, team_id) VALUES (?,?,?,?,?,?,?,?)')
+      .run('u_admin', T1.id, 'Admin', 'AD', email, hashPassword(password), 'admin', null);
+  })();
+}
+
+export function seedIfEmpty(db, { demo = false, admin } = {}) {
+  if (db.prepare('SELECT COUNT(*) n FROM tenants').get().n > 0) return;
+  if (demo) { seed(db); console.log(`Seeded DEMO data (fake brands, people and records). Login: admin@stitch.test / priya@stitch.test / ... password: ${DEMO_PASSWORD}`); return; }
+  seedBase(db, admin);
+  console.log(admin && admin.password !== DEMO_PASSWORD
+    ? `Created a clean company. First admin: ${admin.email}. Sign in, then add your brands in Settings -> Brands.`
+    : `Created a clean company. Sign in with admin@stitch.test / ${DEMO_PASSWORD} (change the password in Settings -> People), then add your brands in Settings -> Brands.`);
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const file = process.env.DB_FILE || fileURLToPath(new URL('../data/stitch.db', import.meta.url));
   if (process.argv.includes('--reset')) for (const s of ['', '-wal', '-shm']) fs.rmSync(file + s, { force: true });
-  const db = openDb(file); seedIfEmpty(db); console.log('Done:', file);
+  const db = openDb(file); seedIfEmpty(db, { demo: process.argv.includes('--demo') }); console.log('Done:', file);
 }

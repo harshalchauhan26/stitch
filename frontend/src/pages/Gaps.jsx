@@ -6,6 +6,7 @@ import Toast from '../components/Toast.jsx';
 import { api } from '../api/index.js';
 import { useApp } from '../context/AppContext.jsx';
 import { eventLabel } from '../lib/format.js';
+import { GapInput } from '../components/FieldControl.jsx';
 
 const WITHIN = [{ value: '', label: 'Any' }, ...[7, 14, 30, 60].map((n) => ({ value: String(n), label: `${n} days` }))];
 const recHref = (g) => `/${g.recordType}s/${g.recordId}`;
@@ -23,12 +24,13 @@ export default function Gaps() {
   const [sev, setSev] = useState('all');
   const [by, setBy] = useState('brand');
   const [owner, setOwner] = useState(params.get('owner') || 'anyone');
-  const [within, setWithin] = useState('');
+  const [within, setWithin] = useState(params.get('eventWithin') || '');
   const [users, setUsers] = useState([]);
   const [vals, setVals] = useState({});                // key -> typed text
   const [errs, setErrs] = useState({});                // key -> inline validation error
   const [toast, setToast] = useState(null);            // { msg, undoKey }
   const timer = useRef();
+  useEffect(() => { setOwner(params.get('owner') || 'anyone'); setWithin(params.get('eventWithin') || ''); }, [params]);   // saved views change the URL while this page stays open
 
   const say = useCallback((msg, undoKey) => {
     clearTimeout(timer.current);
@@ -193,9 +195,8 @@ export default function Gaps() {
                   {!isDone && g.fix === 'text' && (
                     <>
                       <label htmlFor={g.key} style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>{g.fieldLabel}</label>
-                      <input id={g.key} className={`inp${errs[g.key] ? ' err' : ''}`} placeholder={g.placeholder} style={{ flexGrow: 1 }} value={vals[g.key] || ''}
-                        title={errs[g.key] || undefined} onChange={(e) => { setVals((v) => ({ ...v, [g.key]: e.target.value })); if (errs[g.key]) setErrs((x) => ({ ...x, [g.key]: null })); }}
-                        onKeyDown={(e) => e.key === 'Enter' && run(g, { value: vals[g.key] })} />
+                      <GapInput g={g} value={vals[g.key]} error={errs[g.key]} style={{ flexGrow: 1 }}
+                        onChange={(val) => { setVals((v) => ({ ...v, [g.key]: val })); if (errs[g.key]) setErrs((x) => ({ ...x, [g.key]: null })); }} onEnter={(val) => run(g, { value: val })} />
                       <button className="btn sm" type="button" onClick={() => run(g, { value: vals[g.key] })}>Save</button>
                       <button className="btn gh sm ic" type="button" aria-label="Ask on WhatsApp" title="Ask on WhatsApp" style={{ width: 28 }} onClick={() => ask(g)}><Icon name="leads" /></button>
                     </>

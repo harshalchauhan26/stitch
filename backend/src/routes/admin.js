@@ -18,6 +18,18 @@ export function seedRulesForBrand(db, tenantId, code) {
   for (const [rec, stage, field, level, brands] of DEFAULT_RULES) if (!brands) ins.run(tenantId, code, rec, stage, field, level);
 }
 
+/**
+ * Runs at server start: adds any default rule an existing brand is missing (new fields from a release).
+ * INSERT OR IGNORE, so a level someone changed in Settings is never overwritten.
+ */
+export function syncDefaultRules(db) {
+  const ins = db.prepare('INSERT OR IGNORE INTO required_rules (tenant_id, brand, record_type, stage, field, level) VALUES (?,?,?,?,?,?)');
+  db.transaction(() => {
+    for (const b of db.prepare('SELECT tenant_id, code FROM brands').all())
+      for (const [rec, stage, field, level, brands] of DEFAULT_RULES) if (!brands || brands.includes(b.code)) ins.run(b.tenant_id, b.code, rec, stage, field, level);
+  })();
+}
+
 export default function adminRoutes(db) {
   const r = express.Router();
   const T = (req) => req.scope.tenantId;

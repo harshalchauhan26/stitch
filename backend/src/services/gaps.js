@@ -1,6 +1,7 @@
 import { FIELDS, SHOPIFY_MAPPED } from '../catalogue.js';
 import { HOT_RISK, blockersForMove, computeGaps, getVal, indexRules, nextStage, riskScore, setVal } from '../gapEngine.js';
-import { daysTo, inr, isoInDays, parseValue, ValidationError } from '../lib.js';
+import { daysTo, inr, isoInDays, parseField, ValidationError } from '../lib.js';
+import { derived } from './derived.js';
 import { audit, getRecord, listRecords, loadRules, saveRecord } from '../repo.js';
 import { sendWhatsApp } from './whatsapp.js';
 
@@ -34,7 +35,7 @@ export function toGapDto({ rec, score }, g, users, now) {
     key: `${rec.id}-${g.field}`, recordType: rec.recordType, recordId: rec.id, rec: rec.customer_name, brand: rec.brand,
     field: g.field, fieldLabel: f.label, stage: rec.stage, hint: hintFor(f, rec),
     eventDate: rec.event_date, days, owner: users.get(rec.owner_id)?.initials ?? '—', ownerId: rec.owner_id,
-    blocking: g.level === 'blocking', score, hot: score >= HOT_RISK, fix: f.fix, placeholder: f.ph || '',
+    blocking: g.level === 'blocking', score, hot: score >= HOT_RISK, fix: f.fix, placeholder: f.ph || '', type: f.type, options: f.options ?? null,
     actions: (f.actions || []).map((a) => ({ id: a.id, label: a.label, resolves: !!a.resolves })),
   };
 }
@@ -60,6 +61,7 @@ export function listGaps(db, scope, q = {}, now) {
 
 // ---- writes -------------------------------------------------------------------------
 const applyChanges = (db, scope, rec, changes, action) => db.transaction(() => {
+  Object.assign(changes, derived(rec, changes));
   const oldV = {};
   for (const [f, v] of Object.entries(changes)) {
     oldV[f] = getVal(rec, f) ?? null;
@@ -97,7 +99,7 @@ export function fixGap(db, scope, key, { value, action }, now) {
   const blocking = gap.level === 'blocking';
 
   if (f.fix === 'text') {
-    const parsed = parseValue(f.type === 'bool' ? 'text' : f.type, value, now);
+    const parsed = parseField(f, value, now);
     const changes = f.textSetsValue ? { [f.storeTextAs]: parsed, [field]: f.textSetsValue } : { [field]: parsed };
     return afterWrite(db, scope, rec, f, blocking, applyChanges(db, scope, rec, changes, 'gap_fix'));
   }

@@ -21,7 +21,7 @@ export function AppProvider({ children }) {
   const login = async (email, password) => { await api.login(email, password); setBrand('ALL'); await loadMe(); };
   const logout = async () => { await api.logout(); setUser(null); setAuth('out'); };
 
-  const value = useMemo(() => ({ dark, toggleTheme: () => setDark((d) => !d), brand, setBrand, user, auth, login, logout, summary, refreshSummary }),
-    [dark, brand, user, auth, summary, refreshSummary]);
+  const value = useMemo(() => ({ dark, toggleTheme: () => setDark((d) => !d), brand, setBrand, user, auth, login, logout, summary, refreshSummary, reloadMe: loadMe }),
+    [dark, brand, user, auth, summary, refreshSummary, loadMe]);
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

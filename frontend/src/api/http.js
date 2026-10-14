@@ -1,4 +1,4 @@
-// Real backend client (Phase 3). Same interface as mock.js, so pages never know which one they use.
+// The one API client. Every call goes to the Express backend (Vite proxies /api to :3001 in development).
 const KEY = 'stitch.token';
 export const getToken = () => localStorage.getItem(KEY);
 export const setToken = (t) => (t ? localStorage.setItem(KEY, t) : localStorage.removeItem(KEY));
@@ -30,4 +30,31 @@ export default {
   askAll: (keys) => req('POST', '/gaps/ask-all', { keys }),
   undo: (auditId) => req('POST', `/audit/${auditId}/undo`),
   search: (q) => req('GET', `/search${qs({ q })}`),
+  ingestConfig: () => req('GET', '/ingest/config'),
+  ingestChats: (chats) => req('POST', '/ingest/chats', { chats }),
+  ingestChat: (id) => req('GET', `/ingest/${id}/chat`),
+  leadChat: (id) => req('GET', `/leads/${encodeURIComponent(id)}/chat`),
+  ingestConfirm: (items) => req('POST', '/ingest/confirm', { items }),
+  // boards + records
+  meta: () => req('GET', '/meta'),
+  leads: (brand) => req('GET', `/leads${qs({ brand })}`),
+  orders: (brand) => req('GET', `/orders${qs({ brand })}`),
+  record: (type, id) => req('GET', `/${type}s/${encodeURIComponent(id)}`),
+  createLead: (body) => req('POST', '/leads', body),
+  patchRecord: (type, id, body) => req('PATCH', `/${type}s/${encodeURIComponent(id)}`, body),
+  move: (type, id, to) => req('POST', `/${type}s/${encodeURIComponent(id)}/move`, { to }),
+  escalate: (orderId, body) => req('POST', `/orders/${encodeURIComponent(orderId)}/escalations`, body),
+  resolveEscalation: (id, resolution) => req('POST', `/escalations/${id}/resolve`, { resolution }),
+  // Settings
+  rules: (params) => req('GET', `/rules${qs(params)}`),
+  saveRule: (body) => req('PUT', '/rules', body),
+  adminBrands: () => req('GET', '/admin/brands'),
+  addBrand: (body) => req('POST', '/admin/brands', body),
+  editBrand: (code, body) => req('PATCH', `/admin/brands/${code}`, body),
+  adminTeams: () => req('GET', '/admin/teams'),
+  addTeam: (body) => req('POST', '/admin/teams', body),
+  editTeam: (id, body) => req('PUT', `/admin/teams/${id}`, body),
+  adminUsers: () => req('GET', '/admin/users'),
+  addUser: (body) => req('POST', '/admin/users', body),
+  editUser: (id, body) => req('PATCH', `/admin/users/${id}`, body),
 };

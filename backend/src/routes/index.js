@@ -11,27 +11,74 @@ import { audit, canSeeBrand, getRecord, visibleBrands } from '../repo.js';
 import { askAll, askOnWhatsApp, fixGap, HttpError, listGaps, undoAudit } from '../services/gaps.js';
 import { buildHome, buildSummary } from '../services/home.js';
 import { createLead, getRecordWithGaps, kanban, moveStage, patchRecord, search } from '../services/records.js';
-import { confirmBatch, processBatch } from '../ingest/service.js';
+import { confirmBatch, getChat, processBatch } from '../ingest/service.js';
 import { llmFromEnv } from '../ingest/llm.js';
 import adminRoutes from './admin.js';
+import { loadConfig } from '../config.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const wrap = (fn) => (req, res, next) => { try { res.json(fn(req, res)); } catch (e) { next(e); } };
 const awrap = (fn) => async (req, res, next) => { try { res.json(await fn(req, res)); } catch (e) { next(e); } };
 
-export function createApp(db, { clock = () => new Date(), llm = llmFromEnv() } = {}) {
+/** Counts failed sign-ins per key inside a time window. In memory: fine for one server, resets on restart. */
+function makeLimiter({ max, windowMs }) {
+  const hits = new Map();
+  return {
+    waitMinutes(key, now = Date.now()) { const e = hits.get(key); return !e || now - e.first > windowMs || e.n < max ? 0 : Math.ceil((e.first + windowMs - now) / 60_000); },
+    fail(key, now = Date.now()) {
+      if (hits.size > 5000) for (const [k, e] of hits) if (now - e.first > windowMs) hits.delete(k);
+      const e = hits.get(key);
+      if (!e || now - e.first > windowMs) hits.set(key, { n: 1, first: now }); else e.n += 1;
+    },
+    ok(key) { hits.delete(key); },
+  };
+}
+
+export function createApp(db, { clock = () => new Date(), llm = llmFromEnv(), config = loadConfig() } = {}) {
   const app = express();
-  app.use(cors());
+  if (config.trustProxy) app.set('trust proxy', config.trustProxy);
+  app.disable('x-powered-by');
+  // Two counters: one per person (email + address) and a much looser one per address, so an office sharing one public IP is not locked out by a few typos.
+  const userLimiter = makeLimiter(config.loginLimit);
+  const ipLimiter = makeLimiter({ max: config.loginLimit.max * 5, windowMs: config.loginLimit.windowMs });
+
+  // ---- security headers on every response ----
+  app.use((_req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('Referrer-Policy', 'no-referrer');
+    res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+    if (config.prod) {
+      res.setHeader('Strict-Transport-Security', 'max-age=15552000');
+      res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
+    }
+    next();
+  });
+  // ---- CORS: open while developing; in production same-origin only unless CORS_ORIGIN lists allowed sites ----
+  if (!config.prod) app.use(cors());
+  else if (config.corsOrigins.length) app.use(cors({ origin: config.corsOrigins }));
+  if (config.prod) app.use((req, res, next) => {
+    const t0 = Date.now();
+    res.on('finish', () => { if (req.path !== '/api/health') console.log(`${req.method} ${req.path} ${res.statusCode} ${Date.now() - t0}ms`); });
+    next();
+  });
   app.use(express.json({ limit: '10mb' }));            // uploaded chat text can be large
   app.use((req, _res, next) => { req.now = clock(); next(); });
 
   // ---- public ---------------------------------------------------------------------------
-  app.get('/api/health', (_q, res) => res.json({ ok: true }));
+  app.get('/api/health', (_q, res, next) => { try { db.prepare('SELECT 1').get(); res.json({ ok: true }); } catch (e) { next(e); } });
   app.post('/api/auth/login', wrap((req) => {
     const { email, password } = req.body || {};
+    const keyUser = `${req.ip}|${String(email || '').toLowerCase()}`, keyIp = String(req.ip);
+    const wait = Math.max(userLimiter.waitMinutes(keyUser), ipLimiter.waitMinutes(keyIp));
+    if (wait) throw new HttpError(429, `Too many sign-in attempts. Try again in ${wait} minute${wait === 1 ? '' : 's'}.`);
     const u = db.prepare(`SELECT u.*, t.active AS tenant_active FROM users u JOIN tenants t ON t.id = u.tenant_id WHERE lower(u.email) = lower(?)`).get(String(email || ''));
     // same error for unknown user / wrong password / disabled account: do not leak which one
-    if (!u || !u.active || !u.tenant_active || !verifyPassword(String(password || ''), u.password_hash)) throw new HttpError(401, 'Wrong email or password');
+    if (!u || !u.active || !u.tenant_active || !verifyPassword(String(password || ''), u.password_hash)) {
+      userLimiter.fail(keyUser); ipLimiter.fail(keyIp);
+      throw new HttpError(401, 'Wrong email or password');
+    }
+    userLimiter.ok(keyUser);
     return { token: signToken({ sub: u.id, tid: u.tenant_id }) };
   }));
 
@@ -60,7 +107,7 @@ export function createApp(db, { clock = () => new Date(), llm = llmFromEnv() } =
   }));
   app.get('/api/meta', wrap((req) => ({
     brands: visibleBrands(db, S(req)).map(({ code, name }) => ({ code, name })), leadStages: LEAD_STAGES, orderStages: ORDER_STAGES, gateFields: GATE_FIELDS,
-    fields: Object.fromEntries(Object.entries(FIELDS).map(([k, f]) => [k, { label: f.label, type: f.type }])),
+    fields: Object.fromEntries(Object.entries(FIELDS).map(([k, f]) => [k, { label: f.label, type: f.type, options: f.options ?? null, records: f.records, system: !!f.system, unit: f.unit ?? null, placeholder: f.ph ?? '' }])),
     users: db.prepare('SELECT id, name, initials, role FROM users WHERE tenant_id = ? AND active = 1').all(S(req).tenantId),
   })));
 
@@ -100,6 +147,8 @@ export function createApp(db, { clock = () => new Date(), llm = llmFromEnv() } =
     if (!['lead', 'order'].includes(record)) throw new ValidationError('Bad record');
     if (!(record === 'lead' ? LEAD_STAGES : ORDER_STAGES).includes(stage)) throw new ValidationError('Bad stage');
     if (!FIELDS[field]) throw new ValidationError('Unknown field');
+    if (FIELDS[field].system) throw new ValidationError('This field is filled in by Stitch and cannot be required');
+    if (!FIELDS[field].records.includes(record)) throw new ValidationError(`${FIELDS[field].label} does not apply to ${record}s`);
     if (!['optional', 'needed', 'blocking'].includes(level)) throw new ValidationError('Bad level');
     if (GATE_FIELDS.includes(field) && level !== 'blocking' && !isAdmin(user)) throw new HttpError(403, 'Only an admin can lower a gate field');
     const old = db.prepare('SELECT level FROM required_rules WHERE tenant_id=? AND brand=? AND record_type=? AND stage=? AND field=?').get(tenantId, brand, record, stage, field);
@@ -117,19 +166,23 @@ export function createApp(db, { clock = () => new Date(), llm = llmFromEnv() } =
     if (![4, 24, 48].includes(Number(slaHours))) throw new ValidationError('SLA must be 4, 24 or 48 hours');
     const r = db.prepare(`INSERT INTO escalations (tenant_id, order_id, raised_by, raised_at, reason, details, sla_hours, assigned_to) VALUES (?,?,?,?,?,?,?,?)`)
       .run(S(req).tenantId, req.params.id, S(req).user.id, req.now.toISOString(), reason, details, Number(slaHours), assignedTo || null);
+    audit(db, { scope: S(req), rec: { recordType: 'order', id: req.params.id }, field: reason, oldValue: null, newValue: { details, slaHours: Number(slaHours) }, action: 'escalate' });
     res.status(201); return { id: Number(r.lastInsertRowid) };
   }));
   app.post('/api/escalations/:id/resolve', wrap((req) => {
     if (!req.body.resolution) throw new ValidationError('resolution is required');
-    const r = db.prepare('UPDATE escalations SET resolved_at = ?, resolution = ? WHERE id = ? AND tenant_id = ? AND resolved_at IS NULL')
-      .run(req.now.toISOString(), req.body.resolution, req.params.id, S(req).tenantId);
-    if (!r.changes) throw new HttpError(404, 'Escalation not found');
+    const e = db.prepare('SELECT order_id, reason FROM escalations WHERE id = ? AND tenant_id = ? AND resolved_at IS NULL').get(req.params.id, S(req).tenantId);
+    if (!e) throw new HttpError(404, 'Escalation not found');
+    db.prepare('UPDATE escalations SET resolved_at = ?, resolution = ? WHERE id = ? AND tenant_id = ?').run(req.now.toISOString(), req.body.resolution, req.params.id, S(req).tenantId);
+    audit(db, { scope: S(req), rec: { recordType: 'order', id: e.order_id }, field: e.reason, oldValue: null, newValue: { resolution: req.body.resolution }, action: 'resolve' });
     return { ok: true };
   }));
 
   // ---- Add Lead -> upload chats --------------------------------------------------------------------
   app.get('/api/ingest/config', wrap(() => ({ mode: llm ? 'llm' : 'code' })));
   app.post('/api/ingest/chats', awrap((req) => processBatch(db, S(req), req.body?.chats, { llm })));
+  app.get('/api/ingest/:id/chat', wrap((req) => getChat(db, S(req), { ingestionId: Number(req.params.id) })));
+  app.get('/api/leads/:id/chat', wrap((req) => getChat(db, S(req), { leadId: req.params.id })));
   app.post('/api/ingest/confirm', wrap((req, res) => { const r = confirmBatch(db, S(req), req.body?.items, req.now); if (r.created.length) res.status(201); return r; }));
 
   // ---- Admin: brands, teams, users (admin only) -----------------------------------------------
@@ -145,7 +198,7 @@ export function createApp(db, { clock = () => new Date(), llm = llmFromEnv() } =
   app.use((err, _req, res, _next) => {
     const status = err.status || 500;
     if (status === 500) console.error(err);
-    res.status(status).json({ error: err.message, ...(err.blockers ? { blockers: err.blockers } : {}) });
+    res.status(status).json({ error: status === 500 && config.prod ? 'Something went wrong' : err.message, ...(err.blockers ? { blockers: err.blockers } : {}) });
   });
   return app;
 }

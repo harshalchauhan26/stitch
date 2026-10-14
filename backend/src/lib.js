@@ -36,6 +36,23 @@ export function parseDate(input, now) {
   return toISO(d);
 }
 
+// Field-aware parsing: select must be one of the options, url must look like a link, longtext keeps its line breaks.
+export function parseField(def, input, now) {
+  const s = String(input ?? '').trim();
+  if (def.options) {
+    if (!s) throw new ValidationError('Choose a value first');
+    const hit = def.options.find((o) => o.toLowerCase() === s.toLowerCase());
+    if (!hit) throw new ValidationError(`Choose one of: ${def.options.join(', ')}`);
+    return hit;
+  }
+  if (def.type === 'url') {
+    if (!/^https?:\/\/\S+$/i.test(s)) throw new ValidationError('Enter a link starting with https://');
+    return s.slice(0, 1000);
+  }
+  if (def.type === 'longtext') { if (!s) throw new ValidationError('Enter a value first'); return s.slice(0, 5000); }
+  return parseValue(def.type === 'bool' || def.type === 'paid' ? 'text' : def.type, input, now);
+}
+
 // Normalises what the user typed in an inline-fix input according to the field type.
 export function parseValue(type, input, now) {
   const s = String(input ?? '').trim();

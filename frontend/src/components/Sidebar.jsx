@@ -4,8 +4,8 @@ import { useApp } from '../context/AppContext.jsx';
 
 const SAVED = [
   { label: 'My gaps today', to: '/gaps?owner=me' },
-  { label: 'Noor · events in 30d', to: '/leads' },
-  { label: 'Blocked for dispatch', to: '/orders' },
+  { label: 'Events in 30 days', to: '/gaps?eventWithin=30' },
+  { label: 'Blocked orders', to: '/orders?filter=blocked' },
 ];
 
 export default function Sidebar() {
@@ -33,7 +33,7 @@ export default function Sidebar() {
       </div>
       <div style={{ flexGrow: 1 }} />
       <nav className="nav" aria-label="Admin">
-        <NavLink to="/settings/required" className={link}><Icon name="settings" />Settings</NavLink>
+        <NavLink to="/settings" className={link}><Icon name="settings" />Settings</NavLink>
       </nav>
       <div className="hl" style={{ padding: '12px 10px 0', display: 'flex', alignItems: 'center', gap: 10 }}>
         <span className="av" style={{ width: 28, height: 28 }}>{user?.initials ?? '··'}</span>

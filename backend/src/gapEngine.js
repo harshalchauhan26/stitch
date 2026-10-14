@@ -15,7 +15,9 @@ export function setVal(rec, field, value) {
 }
 
 export function isFilled(field, v) {
-  const type = FIELDS[field]?.type;
+  const def = FIELDS[field];
+  const type = def?.type;
+  if (def?.doneValues) return def.doneValues.includes(v);
   if (type === 'bool') return v === 'Yes';
   if (type === 'paid') return v === 'Paid';
   return v !== null && v !== undefined && String(v).trim() !== '';
@@ -40,6 +42,7 @@ export function computeGaps(rec, rulesIdx) {
   for (let i = 0; i <= upto; i++) {
     for (const rule of rulesIdx.get(`${rec.brand}|${rec.recordType}|${stages[i]}`) || []) {
       if (rule.level === 'optional') continue;
+      if (FIELDS[rule.field]?.appliesWhen && !FIELDS[rule.field].appliesWhen(rec)) continue;
       if (isFilled(rule.field, getVal(rec, rule.field))) continue;
       const prev = byField.get(rule.field);
       if (!prev || (rule.level === 'blocking' && prev.level !== 'blocking')) byField.set(rule.field, { field: rule.field, level: rule.level, ruleStage: stages[i] });

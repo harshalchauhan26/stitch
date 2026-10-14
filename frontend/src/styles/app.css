@@ -62,3 +62,30 @@ a{color:var(--goldT)}a:hover{color:var(--gold)}
 .sres{position:absolute;top:38px;left:0;right:0;background:var(--sf);border:1px solid var(--ln);border-radius:8px;box-shadow:var(--shadow);z-index:40;padding:4px}
 .sres a{display:flex;gap:10px;align-items:center;padding:7px 10px;border-radius:5px;color:var(--ink);text-decoration:none}
 .sres a:hover{background:var(--sf2)}
+/* ---- boards, drawer, settings (added for the real app) ---- */
+.board{flex:1;display:flex;gap:12px;overflow-x:auto;padding:4px 28px 24px;align-items:flex-start}
+.col{width:268px;flex-shrink:0;background:var(--sf2);border-radius:10px;display:flex;flex-direction:column;max-height:100%;border:1px solid var(--ln2)}
+.col.over{outline:2px dashed var(--gold);outline-offset:-2px}
+.colh{display:flex;align-items:center;gap:8px;padding:10px 12px;font-weight:600;font-size:12px;color:var(--ink2)}
+.cards{display:flex;flex-direction:column;gap:8px;padding:0 8px 8px;overflow-y:auto;min-height:40px}
+.card{background:var(--sf);border:1px solid var(--ln);border-radius:8px;padding:10px 12px;display:flex;flex-direction:column;gap:7px;cursor:pointer;color:var(--ink)}
+.card:hover{border-color:var(--gold)}
+.card.blk{border-left:3px solid var(--red)}
+.card.sel{border-color:var(--gold);box-shadow:0 0 0 3px var(--goldS)}
+.scrim{position:absolute;inset:0;background:var(--scrim);z-index:30}
+.drawer{position:absolute;top:0;right:0;bottom:0;width:620px;max-width:100%;background:var(--bg);border-left:1px solid var(--ln);box-shadow:var(--shadow);z-index:31;display:flex;flex-direction:column}
+.dbody{flex:1;overflow-y:auto}
+.dsec{padding:16px 24px;border-top:1px solid var(--ln2);display:flex;flex-direction:column;gap:10px}
+.stg{display:flex;gap:4px;flex-wrap:wrap}
+.stg span{font:500 10px/1 'IBM Plex Sans',sans-serif;padding:5px 7px;border-radius:4px;background:var(--sf2);color:var(--ink3)}
+.stg span.past{color:var(--ink2)}
+.stg span.cur{background:var(--gold);color:var(--onGold)}
+.fgrid{display:grid;grid-template-columns:150px 1fr;gap:8px 12px;align-items:center}
+.fgrid .inp{height:28px;font-size:12px;width:100%}
+.tabs{display:flex;gap:2px;padding:0 28px;border-bottom:1px solid var(--ln)}
+.tabs a{padding:10px 14px;font-size:13px;color:var(--ink2);text-decoration:none;border-bottom:2px solid transparent;margin-bottom:-1px}
+.tabs a.on{color:var(--goldT);border-bottom-color:var(--gold);font-weight:500}
+.tbl{border:1px solid var(--ln);border-radius:10px;overflow:hidden;background:var(--sf)}
+.tbl .r{display:grid;gap:12px;align-items:center;padding:9px 16px;border-top:1px solid var(--ln2)}
+.tbl .r:first-child{border-top:0}
+.tbl .h{background:var(--sf2);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);font-weight:500;padding:8px 16px}

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import Icon from '../lib/Icon.jsx';
 import Menu from './Menu.jsx';
-import { api, USE_MOCK } from '../api/index.js';
+import { api } from '../api/index.js';
 import { useApp } from '../context/AppContext.jsx';
 
 export default function Topbar({ searchRef }) {
@@ -43,7 +43,6 @@ export default function Topbar({ searchRef }) {
         )}
       </div>
       <div style={{ flexGrow: 1 }} />
-      {USE_MOCK && <span className="chip">Sample data</span>}
       <button className="btn gh ic" type="button" aria-label="Toggle dark theme" onClick={toggleTheme}><Icon name="moon" /></button>
       <button className="btn gh ic" type="button" aria-label="Notifications"><Icon name="bell" /></button>
       <Link className="btn pri" to="/leads/new">

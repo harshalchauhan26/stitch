@@ -61,6 +61,27 @@ export const CITY_COUNTRY = { Mumbai: 'India', Delhi: 'India', 'New Delhi': 'Ind
 const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
 const NUMWORDS = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6 };
 
+// Buying-intent keywords: what the CUSTOMER says. Positive = acting like a buyer, negative = reasons to stop chasing.
+const POSITIVE = [
+  ['ready to order', /\b(ready to (order|book|buy)|want to (order|book|buy)|place (the|an|my) order|book(ing)? (it|this|the)|go ahead|confirm(ed)? (the )?order|let'?s (do|proceed))\b/i],
+  ['asked about payment', /\b(advance|token amount|payment (link|details)|how (do|can) i pay|pay(ing)? now|send (me )?(the )?(link|invoice))\b/i],
+  ['gave sizing', /\b(measurements?|size chart|my size|fitting|try (it |them )?on|trial)\b/i],
+  ['asked about delivery', /\b(when (can|will) (you|it) (deliver|ship|be ready)|delivery (date|time)|deliver(ed)? by|need it by|ready by|before (the )?(wedding|event|function))\b/i],
+  ['wants to visit', /\b(visit (the )?(store|studio|boutique)|come (to|by) (the )?(store|studio|boutique)|appointment)\b/i],
+];
+const NEGATIVE = [
+  ['just looking', /\bjust (looking|browsing|checking|exploring)\b/i],
+  ['not interested', /\b(not interested|no longer interested|don'?t need|do not need|no requirement)\b/i],
+  ['budget too low', /\b(too (expensive|costly|high|much)|out of (my )?budget|can'?t afford|cannot afford|beyond (my )?budget)\b/i],
+  ['asked to stop', /\b(stop messaging|don'?t message|do not message|unsubscribe|wrong number)\b/i],
+  ['cancelled', /\b(cancel(led|ling)?|called off|postponed|not happening)\b/i],
+];
+/** -> { positive: [{ name, evidence }], negative: [{ name, evidence }] }  (each keyword group counted once per chat) */
+export function keywordSignals(messages) {
+  const find = (list) => list.flatMap(([name, re]) => { const m = messages.find((x) => re.test(x.text)); return m ? [{ name, evidence: m.text.replace(/\s+/g, ' ').slice(0, 140) }] : []; });
+  return { positive: find(POSITIVE), negative: find(NEGATIVE) };
+}
+
 const snippet = (m) => `${m.text.replace(/\s+/g, ' ').slice(0, 140)}`;
 
 /** Budget from phrases like "budget around 2 lakh", "₹1.5L to 2L", "under $3000". Returns { min, max, currency } or null. */
@@ -137,5 +158,6 @@ export function extractSignals(parsed, { fileName, brands = [] }) {
       name: nameMatch ? { value: nameMatch[1] } : null,
       productLinks: productLinks.slice(0, 10),
     },
+    keywords: keywordSignals(hintMsgs),
   };
 }
