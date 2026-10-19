@@ -68,3 +68,10 @@ export function requirePhone(input, label = 'Phone') {
   if (!p) throw badRequest(`${label} must be a phone number with 8 to 15 digits, e.g. +91 98111 15326`);
   return p;
 }
+
+/** The customer's number from an export's file name or sender label: "WhatsApp Chat with +91 98111 15326.txt" */
+export function phoneFromLabel(label) {
+  const s = String(label || '').replace(/\.[a-z0-9]{2,4}$/i, '').replace(/^whatsapp chat (with|-)\s*/i, '');
+  const m = s.match(/\+?\(?\d[\d\s\-()_]{6,}\d/);
+  return m ? parsePhone(m[0].replace(/_/g, ' ').trim()) : null;
+}

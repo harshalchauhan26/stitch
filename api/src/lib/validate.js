@@ -57,3 +57,7 @@ export function isoDate(v, label, { required = false } = {}) {
 // "Today" in the business's time zone, not the server's (Render runs in UTC; 00:00-05:30 IST would be yesterday)
 const TZ = process.env.BUSINESS_TZ || 'Asia/Kolkata';
 export const todayIso = (now = new Date()) => new Intl.DateTimeFormat('en-CA', { timeZone: TZ }).format(now);
+
+// Chat exports carry the phone's local time with no zone. Read it as business time (IST by default).
+const OFFSET = process.env.BUSINESS_UTC_OFFSET || '+05:30';
+export const localToDate = (isoLocal) => new Date(`${isoLocal}${OFFSET}`);

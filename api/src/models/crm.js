@@ -85,6 +85,7 @@ export const eventSchema = (recordKey, collection) => {
 const LeadIssueSchema = new Schema({
   tenant_id: tenantRef,
   lead_id: { type: ObjectId, ref: 'Lead', required: true },
+  brand_id: { type: ObjectId, ref: 'Brand', required: true },   // copied from the lead, for brand scoping
   item_id: { type: ObjectId, default: null },
   type: { type: String, enum: ISSUE_TYPES, required: true },
   title: { type: String, required: true, trim: true },
@@ -98,7 +99,7 @@ const LeadIssueSchema = new Schema({
   resolution: { type: String, default: null },
 }, baseOptions('lead_issues'));
 LeadIssueSchema.index({ tenant_id: 1, lead_id: 1, status: 1 });
-LeadIssueSchema.index({ tenant_id: 1, status: 1, type: 1 });
+LeadIssueSchema.index({ tenant_id: 1, brand_id: 1, status: 1, type: 1 });
 
 // conversation <-> lead is many-to-many through lead_links[]
 const LeadLinkSchema = new Schema({
