@@ -89,3 +89,5 @@ a{color:var(--goldT)}a:hover{color:var(--gold)}
 .tbl .r{display:grid;gap:12px;align-items:center;padding:9px 16px;border-top:1px solid var(--ln2)}
 .tbl .r:first-child{border-top:0}
 .tbl .h{background:var(--sf2);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);font-weight:500;padding:8px 16px}
+.btn:disabled,.btn[disabled]{opacity:.45;cursor:not-allowed}
+.btn:disabled:hover{border-color:var(--ln)}

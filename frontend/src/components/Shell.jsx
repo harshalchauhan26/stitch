@@ -16,7 +16,7 @@ function useShortcuts(searchRef) {
       const k = e.key.toLowerCase();
       if (k === '/') { e.preventDefault(); searchRef.current?.focus(); return; }
       if (k === 'n') { nav('/leads/new'); return; }
-      if (g) { g = false; clearTimeout(t); const to = { h: '/', l: '/leads', o: '/orders', g: '/gaps' }[k]; if (to) nav(to); return; }
+      if (g) { g = false; clearTimeout(t); const to = { h: '/', l: '/leads', o: '/orders', g: '/gaps', d: '/dispatches' }[k]; if (to) nav(to); return; }
       if (k === 'g') { g = true; t = setTimeout(() => { g = false; }, 1200); }
     };
     window.addEventListener('keydown', onKey);

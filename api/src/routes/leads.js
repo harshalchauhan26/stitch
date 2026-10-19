@@ -23,7 +23,7 @@ function layout(rb) {
     stage,
     fields: rb.rules.lead.filter((r) => r.stage === stage && !seen.has(r.field) && seen.add(r.field)).map((r) => {
       const d = rb.defs.get(r.field);
-      return d && { key: d.key, label: d.label, scope: d.scope, type: d.type, options: d.options ?? null, unit: d.unit, level: r.level, computed: d.computed, hint: d.hint };
+      return d && { key: d.key, label: d.label, scope: d.scope, type: d.type, options: d.options ?? null, unit: d.unit, level: r.level, computed: d.computed, hint: d.hint, custom: !!d.brand_id };
     }).filter(Boolean),
   }));
 }

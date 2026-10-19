@@ -249,14 +249,14 @@ export async function weeklyDispatches(scope, { week, brand } = {}) {
     byBrand[k] ??= { brand: k, total: 0, late: 0, ...Object.fromEntries(DISPATCH_STATUSES.map((st) => [st, 0])) };
     byBrand[k].total++; byBrand[k][s.status]++; if (s.late) byBrand[k].late++;
   }
-  const row = (s) => ({ id: s._id, order_no: ord.get(String(s.order_id))?.order_no, brand: code(s.brand_id), shipment_no: s.shipment_no, courier: s.courier, awb: s.awb,
+  const row = (s) => ({ id: s._id, order_id: s.order_id, order_no: ord.get(String(s.order_id))?.order_no, brand: code(s.brand_id), shipment_no: s.shipment_no, courier: s.courier, awb: s.awb,
     dispatch_date: s.dispatch_date, promised_ship_date: ord.get(String(s.order_id))?.dates.promised_ship_date ?? null, status: s.status, late: s.late, delivered_at: s.delivered_at });
   const corrections = [
     ...corrected.flatMap((s) => s.corrections.filter((c) => c.at >= start && c.at < end).map((c) => ({
-      kind: 'dispatch', at: c.at, order_no: ord.get(String(s.order_id))?.order_no, brand: code(s.brand_id), field: c.field, old: c.old, new: c.new, reason: c.reason, by: who(c.by),
+      kind: 'dispatch', at: c.at, order_id: s.order_id, order_no: ord.get(String(s.order_id))?.order_no, brand: code(s.brand_id), field: c.field, old: c.old, new: c.new, reason: c.reason, by: who(c.by),
     }))),
     ...versions.map((v) => ({
-      kind: v.kind, at: v.created_at, order_no: ord.get(String(v.order_id))?.order_no, brand: code(v.brand_id),
+      kind: v.kind, at: v.created_at, order_id: v.order_id, order_no: ord.get(String(v.order_id))?.order_no, brand: code(v.brand_id),
       item: ord.get(String(v.order_id))?.items.find((i) => String(i._id) === String(v.order_item_id))?.product_name ?? null,
       version: v.version, field: v.changed_fields.join(', '), reason: v.reason, by: who(v.created_by),
     })),
