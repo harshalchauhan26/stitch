@@ -10,7 +10,7 @@
     "dev": "node --watch src/server.js",
     "mongo:dev": "node scripts/dev-mongo.js",
     "seed:demo": "node scripts/seed-demo.js",
-    "test": "node --test --test-concurrency=1 tests/"
+    "test": "node --test --test-concurrency=1 \"tests/**/*.test.js\""
   },
   "dependencies": {
     "cors": "2.8.6",
