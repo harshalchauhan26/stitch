@@ -3,11 +3,9 @@ dist/
 .env
 *.env
 !.env.example
-backend/data/
 *.db
 *.db-wal
 *.db-shm
-backend/check-*.mjs
 *.log
 # local MongoDB for the api (npm run mongo:dev)
 api/.mongo-data/

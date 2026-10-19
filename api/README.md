@@ -1,6 +1,6 @@
 # Stitch API (v1, MongoDB)
 
-The backend described in [docs/PLAN_v1.md](../docs/PLAN_v1.md). The older SQLite prototype in `backend/` is kept as a reference only.
+The backend described in [docs/PLAN_v1.md](../docs/PLAN_v1.md). It replaces the earlier SQLite prototype (removed; it is still in the git history).
 
 ## Run it locally
 
