@@ -61,3 +61,27 @@ export const todayIso = (now = new Date()) => new Intl.DateTimeFormat('en-CA', {
 // Chat exports carry the phone's local time with no zone. Read it as business time (IST by default).
 const OFFSET = process.env.BUSINESS_UTC_OFFSET || '+05:30';
 export const localToDate = (isoLocal) => new Date(`${isoLocal}${OFFSET}`);
+
+/** "2026-W43" -> { week, from: Monday, to: Sunday } as YYYY-MM-DD; no input = this week (business time) */
+export function isoWeek(input) {
+  let year, week;
+  if (input) {
+    const m = String(input).trim().match(/^(\d{4})-W(\d{1,2})$/i);
+    if (!m) throw badRequest('week must look like 2026-W43');
+    [year, week] = [+m[1], +m[2]];
+  } else {
+    const d = new Date(`${todayIso()}T00:00:00Z`);
+    const day = d.getUTCDay() || 7;
+    d.setUTCDate(d.getUTCDate() + 4 - day);                 // the Thursday of this week decides the ISO year
+    year = d.getUTCFullYear();
+    week = Math.ceil(((d - Date.UTC(year, 0, 1)) / 86400000 + 1) / 7);
+  }
+  const jan4 = new Date(Date.UTC(year, 0, 4));
+  const monday = new Date(jan4);
+  monday.setUTCDate(jan4.getUTCDate() - ((jan4.getUTCDay() || 7) - 1) + (week - 1) * 7);
+  const thursday = new Date(monday); thursday.setUTCDate(monday.getUTCDate() + 3);
+  if (week < 1 || thursday.getUTCFullYear() !== year) throw badRequest(`${year} has no week ${week}`);
+  const sunday = new Date(monday); sunday.setUTCDate(monday.getUTCDate() + 6);
+  const ymd = (x) => x.toISOString().slice(0, 10);
+  return { week: `${year}-W${String(week).padStart(2, '0')}`, from: ymd(monday), to: ymd(sunday) };
+}

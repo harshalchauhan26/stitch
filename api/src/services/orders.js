@@ -124,3 +124,27 @@ export async function moveOrderStage(scope, orderId, body = {}) {
   }
   return result;
 }
+
+/**
+ * Recalculates what Stitch fills in on an order (customer_sign_off from the measurements, tracking_shared from the
+ * dispatches), applies `set`, and writes one event. Server-side writes use the order's current version.
+ */
+export async function syncOrder(session, scope, orderId, { set = {}, event }) {
+  const { Customisation, Dispatch } = await import('../models/index.js');
+  const order = await Order.findById(orderId).session(session).lean();
+  const measIds = order.items.map((i) => i.current_measurements_id).filter(Boolean);
+  const signed = await Customisation.countDocuments({ _id: { $in: measIds }, status: 'signed_off' }).session(session);
+  const shared = await Dispatch.exists({ order_id: order._id, tracking_shared_at: { $ne: null } }).session(session);
+  const computed = { customer_sign_off: measIds.length && signed === measIds.length ? 'Yes' : 'No', tracking_shared: shared ? 'Yes' : null };
+  const changes = [...(event.changes || [])];
+  const fields = { ...order.fields };
+  for (const [k, v] of Object.entries(computed)) {
+    if ((fields[k] ?? null) === v) continue;
+    changes.push({ field: k, scope: 'order', old: fields[k] ?? null, new: v });
+    fields[k] = v;
+  }
+  const next = { ...order, ...set, fields };
+  const gaps = await orderGaps(next, session);
+  await commitWrite(session, scope, 'order', order, { $set: { ...set, 'fields.customer_sign_off': computed.customer_sign_off, 'fields.tracking_shared': computed.tracking_shared, ...gapCounts(gaps) } }, { ...event, changes });
+  return next;
+}
