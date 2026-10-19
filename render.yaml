@@ -1,0 +1,28 @@
+# Render Blueprint for the Stitch v1 API (docs/PLAN_v1.md §18). Database: MongoDB Atlas (free M0 works).
+# In Render: New > Blueprint > pick this repo. It asks for the values marked sync: false.
+services:
+  - type: web
+    name: stitch-api
+    runtime: node
+    plan: free
+    rootDir: api
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "22"
+      - key: MONGODB_URI            # mongodb+srv://... from Atlas (Atlas is a replica set, so transactions work)
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ADMIN_EMAIL            # first admin login, used only when the database is empty
+        sync: false
+      - key: ADMIN_PASSWORD         # at least 10 characters
+        sync: false
+      - key: CORS_ORIGIN            # the frontend's URL, once it is deployed
+        sync: false
+      - key: BUSINESS_TZ
+        value: Asia/Kolkata

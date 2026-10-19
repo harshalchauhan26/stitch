@@ -1,44 +1,61 @@
+import { useState } from 'react';
+import { inr, toPaise, toRupees } from '../lib/format.js';
 
-
-const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-const longDate = (iso) => (/^\d{4}-\d{2}-\d{2}$/.test(iso || '') ? `${Number(iso.slice(8))} ${MON[Number(iso.slice(5, 7)) - 1]} ${iso.slice(0, 4)}` : iso || '');
 const LEVEL = { blocking: ['red', 'Blocking'], needed: ['amb', 'Needed'], optional: [null, 'Optional'] };
-
 export const LevelChip = ({ level }) => (LEVEL[level] ? <span className={`chip ${LEVEL[level][0] || ''}`} style={{ fontSize: 10, height: 18 }}>{LEVEL[level][1]}</span> : null);
 
-// A gap's fix input: a <select> for fixed-choice fields, a text box otherwise. Controlled by the caller.
-export function GapInput({ g, value, onChange, onEnter, error, style }) {
-  if (g.options) {
-    return (
-      <select className={`inp${error ? ' err' : ''}`} aria-label={g.fieldLabel} value={value || ''} style={style} title={error || undefined}
-        onChange={(e) => { onChange(e.target.value); if (e.target.value && onEnter) onEnter(e.target.value); }}>
-        <option value="">Choose…</option>{g.options.map((o) => <option key={o}>{o}</option>)}
-      </select>
-    );
-  }
-  return (
-    <input className={`inp${error ? ' err' : ''}`} aria-label={g.fieldLabel} placeholder={g.placeholder} value={value || ''} style={style} title={error || undefined}
-      onChange={(e) => onChange(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && onEnter?.(value)} />
-  );
+/** The value as the API wants it, from what was typed: null clears the field, NaN means "not a valid amount". */
+export function fromInput(def, raw) {
+  const s = typeof raw === 'string' ? raw.trim() : raw;
+  if (s === '' || s == null) return null;
+  if (def.type === 'currency') return toPaise(s);
+  if (def.type === 'number') return Number.isNaN(Number(s)) ? s : Number(s);
+  return s;
 }
 
-// An editable (or read-only) value for the Drawer. f: { key, label, type, options, unit, placeholder, value, system }. Saves on blur / change.
-export default function FieldControl({ f, onSave }) {
-  const was = f.type === 'date' ? longDate(f.value) : f.value;
-  const save = (val) => { if (String(val ?? '') !== String(was ?? '')) onSave(f.key, val); };
-  if (f.system) return <span className="m mut" style={{ fontSize: 12 }}>{f.value ? String(f.value) : '—'}</span>;
-  const opts = f.options || (f.type === 'bool' ? ['Yes'] : f.type === 'paid' ? ['Paid'] : null);
+const display = (def, v) => {
+  if (v == null || v === '') return '';
+  if (def.type === 'currency') return toRupees(v);
+  return String(v);
+};
+
+/**
+ * One editable field. def: { key, label, type, options, unit, computed, hint }. Saves on blur (text) or change (choices).
+ * onSave(key, apiValue). Values Stitch fills in itself (from payments, dispatches) are shown read-only.
+ */
+export default function FieldControl({ def, value, onSave, disabled }) {
+  const shown = display(def, value);
+  const [bad, setBad] = useState(null);
+  const save = (raw) => {
+    const v = fromInput(def, raw);
+    // "95k" is not an amount: say so instead of sending it (NaN would reach the API as null and clear the field)
+    if (typeof v === 'number' && Number.isNaN(v)) { setBad(def.type === 'currency' ? 'Enter an amount in rupees, e.g. 95000' : 'Enter a number'); return; }
+    setBad(null);
+    if (String(v ?? '') !== String(value ?? '')) onSave(def.key, v);
+  };
+  if (def.computed) {
+    return <span className="m" style={{ fontSize: 12, color: value ? 'var(--ink)' : 'var(--ink3)' }} title={def.hint}>{def.type === 'currency' ? (value != null ? inr(value) : 'from payments') : value ?? (def.hint ? 'filled by Stitch' : '—')}</span>;
+  }
+  const opts = def.options?.length ? def.options : def.type === 'bool' ? ['Yes', 'No'] : null;
   if (opts) {
     return (
-      <select className="inp" aria-label={f.label} value={f.value ?? ''} onChange={(e) => save(e.target.value)}>
+      <select className="inp" aria-label={def.label} value={value ?? ''} disabled={disabled} onChange={(e) => save(e.target.value)}>
         <option value="">—</option>{opts.map((o) => <option key={o}>{o}</option>)}
       </select>
     );
   }
-  if (f.type === 'longtext') {
-    return <textarea className="inp" aria-label={f.label} rows={3} defaultValue={f.value ?? ''} key={`${f.key}-${f.value}`} placeholder={f.placeholder}
-      style={{ height: 'auto', padding: 8, resize: 'vertical' }} onBlur={(e) => save(e.target.value.trim())} />;
+  if (def.type === 'longtext') {
+    return <textarea className="inp" aria-label={def.label} rows={2} defaultValue={shown} key={`${def.key}-${shown}`} disabled={disabled}
+      style={{ height: 'auto', padding: 8, resize: 'vertical' }} onBlur={(e) => save(e.target.value)} />;
   }
-  return <input className="inp" aria-label={f.label} defaultValue={was ?? ''} key={`${f.key}-${f.value}`} placeholder={f.placeholder || (f.unit === 'in' ? 'inches' : '')}
-    onBlur={(e) => save(e.target.value.trim())} onKeyDown={(e) => e.key === 'Enter' && e.target.blur()} />;
+  const type = def.type === 'date' ? 'date' : 'text';
+  const ph = def.type === 'currency' ? '₹ amount' : def.unit ? def.unit : def.type === 'url' ? 'https://' : '';
+  return (
+    <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+      <input className={`inp${bad ? ' err' : ''}`} type={type} aria-label={def.label} defaultValue={shown} key={`${def.key}-${shown}`} placeholder={ph} disabled={disabled}
+        inputMode={['number', 'currency'].includes(def.type) ? 'decimal' : undefined} title={bad || undefined}
+        onBlur={(e) => save(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && e.target.blur()} />
+      {bad && <span className="err-t">{bad}</span>}
+    </span>
+  );
 }

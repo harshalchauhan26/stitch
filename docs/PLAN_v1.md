@@ -3,6 +3,8 @@
 **Status:** Draft for review · **Date:** 19 Oct 2026 · **Database:** MongoDB
 **Based on:** `Stitch_Field_Flow_10_page.md` (the Field & Flow doc). Where this plan says "spec", it means that doc.
 
+**Changes, 20 Oct (CEO):** each brand can have its own lead pipeline and its own custom fields (§4.3). The order pipeline stays the same for every brand. Custom fields are optional or needed, never blocking.
+
 **Changes, 19 Oct (review with Harshal):** added products (§5.16), full order details (§5.12), customisations with versioned corrections (§5.17), a payments ledger (§5.18), dispatches with a weekly view (§5.19), and deployment on Render (§18).
 
 ---
@@ -124,6 +126,15 @@ tenant
 **Responses:** a conflict returns **HTTP 409** with the existing brand's name, who added it, when, and its teams. A **similar** but not identical name (edit distance ≤ 2, such as "Noor Ateliers") returns a **warning**. The admin can still proceed.
 
 **Archived brands:** a brand is never deleted; it is archived instead. Re-onboarding an archived brand offers **"Restore"** rather than creating a duplicate.
+
+### 4.3 Per-brand setup: pipeline and custom fields (added 20 Oct)
+
+The agency's sales team sets each brand up at onboarding:
+
+- **Lead pipeline.** The brand's own list of stages (a single-select status). Each stage has a type: **open** stages are worked through in order, the **won** stage creates the order (whatever the brand calls it, e.g. "Confirmed"), and the **lost** stage closes the lead. The default is the spec's stages. Template rules are placed on the stage at the same relative position, so the payment gate always sits on the stage before won.
+- **Editing a pipeline.** Renaming a stage moves its leads and rules with it. A stage that still has leads cannot be removed; once empty, its rules move to the stage before it. Every change is logged.
+- **Custom fields.** A brand can add its own fields (text, number, date, dropdown, yes/no, link), on the lead or on each product, at a chosen stage, as optional or needed. Only that brand sees them. They are stored in the same `fields` bag, show up as gaps when needed, and are copied to the order at won.
+- **Order pipeline.** The same for every brand: it is the agency's fulfilment process.
 
 ---
 
@@ -574,7 +585,7 @@ Saving with gaps is **always allowed** (spec §3, "Quick add").
 { "version": 7, "to": "Quoted", "reason": null }
 ```
 
-- **Forward moves:** allowed only when there are **no Blocking gaps** in the current stage and in any stage being skipped. Needed gaps never block (spec §4.1).
+- **Forward moves:** allowed only when there are **no Blocking gaps** in the current stage and in any stage being skipped. Needed gaps never block (spec §4.1). A gate only blocks the move that crosses it: once a record is past a gate (met, or overridden by a pod lead), later moves don't re-check it, though its gap stays visible.
 - **Refused moves:** return **422** with the list of Blocking gaps, and log a `stage.move_blocked` event so pod leads can see where people get stuck.
 - **Backward moves:** always allowed, but a `reason` is required.
 - **Overrides (spec Q2):** a pod lead may pass `override: true` with a reason. This writes a `stage.overridden` event.
@@ -639,7 +650,7 @@ gaps(lead) =
 
 **Caching:** the gaps are recomputed on every lead write, and the counts are cached on the lead for list views.
 
-**Reuse:** the current prototype's [`backend/src/gapEngine.js`](../backend/src/gapEngine.js) already implements this. Port it and add item-level rules.
+**Reuse:** ported from the SQLite prototype's gap engine, with item-level rules added (`api/src/services/gaps.js`).
 
 ---
 
@@ -649,7 +660,7 @@ gaps(lead) =
 
 `POST /conversations` (multipart: a `.txt` or `.zip` export, plus `whatsapp_account_id`)
 
-1. **Parse with code only.** Reuse the prototype's [`whatsappParser.js`](../backend/src/ingest/whatsappParser.js). It handles iPhone and Android formats, multi-line messages, media placeholders, and works out which side is staff and which is the customer.
+1. **Parse with code only.** Reuses the prototype's parser (`api/src/lib/whatsappParser.js`). It handles iPhone and Android formats, multi-line messages, media placeholders, and works out which side is staff and which is the customer.
 2. **Brand:** taken from the WhatsApp account. The uploader picks the account; it's pre-selected when they can only see one.
 3. **Client:** taken from the customer's phone, found in the file name ("WhatsApp Chat with +91 …") or in the sender label. The client is created if new. If no phone is found, the uploader enters one.
 4. **Duplicate and re-upload handling:**
@@ -717,7 +728,7 @@ It also means a slow or failing brand endpoint can never block or roll back a Wo
 
 - **Picking up work:** a loop, every 5 seconds or on a change stream, claims due outbox rows with `findOneAndUpdate({ status: 'pending', next_attempt_at ≤ now }, { status: 'processing' })`.
 - **Sending:** it POSTs to every active endpoint of the brand that subscribes to the event. The timeout is **10 seconds**, and only **2xx** counts as success.
-- **Retries:** after 1 minute, 5 minutes, 30 minutes, 2 hours, 6 hours, then 24 hours. After the 6th failure the row is marked `failed`, and admins get a notification and a **Redeliver** button.
+- **Retries:** after 1 minute, 5 minutes, 30 minutes, 2 hours, then 6 hours. The 6th failed attempt marks the row `failed`, and admins get a notification and a **Redeliver** button.
 - **Receivers must de-duplicate** by `X-Stitch-Event-Id`, because delivery is *at least once*.
 
 ### 11.4 Request format
@@ -835,7 +846,7 @@ X-Stitch-Signature: sha256=<HMAC-SHA256(secret, timestamp + "." + body)>
 
 ## 16. Reuse from the current prototype
 
-The repo already has a working SQLite prototype. It is the reference implementation for the logic; only the storage layer changes to MongoDB.
+The SQLite prototype (`backend/`) was the reference for the logic. Its useful parts were ported into `api/` and the folder was then removed (20 Oct); it remains in the git history.
 
 | Prototype file | Reuse as |
 |---|---|

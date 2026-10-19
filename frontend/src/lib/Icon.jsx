@@ -16,6 +16,10 @@ const P = {
   pencil: <path d="M4 16l1-4 8-8 3 3-8 8z" />,
   paste: <><rect x="5" y="3" width="10" height="14" rx="1.5" /><path d="M8 7h4M8 10h4M8 13h2" /></>,
   check: <path d="m4.5 10.5 3.5 3.5 7.5-8" />,
+  truck: <><path d="M2.5 5.5h9v8h-9zM11.5 8.5h3l3 3v2h-6z" /><circle cx="6" cy="14.5" r="1.5" /><circle cx="14.5" cy="14.5" r="1.5" /></>,
+  x: <path d="M5 5l10 10M15 5 5 15" />,
+  up: <path d="m6 12 4-4 4 4" />,
+  down: <path d="m6 8 4 4 4-4" />,
 };
 
 export default function Icon({ name, small, className = '', style, ...rest }) {
