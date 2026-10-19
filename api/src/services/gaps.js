@@ -1,7 +1,6 @@
 // The gap engine (spec §5.1, PLAN §9). One calculation feeds every screen.
 //   gap = a rule (brand + record + stage + field -> needed | blocking) whose field is empty
 // A record shows gaps for its current stage and every earlier stage, never later ones (spec A2).
-import { pipelineOf } from '../lib/constants.js';
 import { conditionHolds, isFilled, valueOf } from '../lib/fields.js';
 
 const itemLabel = (item, n) => `Item ${n} · ${item.product}`;
@@ -11,10 +10,12 @@ const itemLabel = (item, n) => `Item ${n} · ${item.product}`;
  * uptoIndex: last pipeline stage to include (defaults to the record's current stage)
  */
 export function computeGaps(rec, rb, uptoIndex) {
-  const stages = pipelineOf(rec.recordType);
-  const upto = uptoIndex ?? stages.indexOf(rec.stage);
-  if (upto < 0) return [];                                   // Won, Lost, or not in the pipeline
+  const stages = rb.stages[rec.recordType];
   const record = rec.recordType === 'lead' ? rec.lead : rec.order;
+  // closed records have no gaps: a Won or Lost lead, a Delivered order (spec: Delivered blocks nothing)
+  if (uptoIndex === undefined && (rec.recordType === 'lead' ? record.stage_type && record.stage_type !== 'open' : record.stage === 'Delivered')) return [];
+  const upto = uptoIndex ?? stages.indexOf(rec.stage);
+  if (upto < 0) return [];
   const items = (record.items || []).filter((i) => !i.removed_at);
   const base = { client: rec.client, lead: rec.lead, order: rec.order };
   const byKey = new Map();
@@ -58,7 +59,7 @@ export function computeGaps(rec, rb, uptoIndex) {
  * does not block every later move again. Its gap still shows on the record.
  */
 export function blockersForMove(rec, rb, to) {
-  const stages = pipelineOf(rec.recordType);
+  const stages = rb.stages[rec.recordType];
   const current = stages.indexOf(rec.stage), target = stages.indexOf(to);
   return computeGaps(rec, rb, target - 1).filter((g) => {
     if (g.level !== 'blocking') return false;

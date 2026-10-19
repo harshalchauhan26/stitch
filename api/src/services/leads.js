@@ -2,7 +2,7 @@
 import mongoose from 'mongoose';
 import { CLIENT_PATHS, ITEM_PATHS } from '../catalogue.js';
 import { withTransaction } from '../db.js';
-import { INTAKE_METHODS, LEAD_PIPELINE, LOST_REASONS, REOPEN_WINDOW_DAYS } from '../lib/constants.js';
+import { INTAKE_METHODS, LOST_REASONS, REOPEN_WINDOW_DAYS } from '../lib/constants.js';
 import { badRequest, conflict, forbidden, HttpError, notFound } from '../lib/errors.js';
 import { parseFieldValue } from '../lib/fields.js';
 import { id, int, oneOf, str } from '../lib/validate.js';
@@ -13,7 +13,6 @@ import { blockersForMove, computeGaps, gapCounts } from './gaps.js';
 import { loadBrandRules } from './rules.js';
 import { canOwnBrand, requireBrand } from './scope.js';
 
-const OPEN_STAGES = LEAD_PIPELINE.slice(0, 5);            // New .. Awaiting payment
 const ITEM_ATTRS = ['product', 'quantity', 'wearer', 'unit_price', 'product_id'];   // stored on the item, not in item.fields
 const same = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
 
@@ -30,8 +29,8 @@ export async function getLead(scope, leadId, session) {
 }
 
 function requireEditable(lead) {
-  if (lead.stage === 'Won') throw conflict('This lead is Won and read-only. Edit its order instead.', { code: 'lead_locked', order_id: lead.converted_order_id });
-  if (lead.stage === 'Lost') throw conflict('This lead is Lost. Reopen it to make changes.', { code: 'lead_lost' });
+  if (lead.stage_type === 'won') throw conflict(`This lead is ${lead.stage} and read-only. Edit its order instead.`, { code: 'lead_locked', order_id: lead.converted_order_id });
+  if (lead.stage_type === 'lost') throw conflict(`This lead is ${lead.stage}. Reopen it to make changes.`, { code: 'lead_lost' });
 }
 
 function requireVersion(body) {
@@ -123,7 +122,7 @@ export async function createLead(scope, body = {}) {
     const { client, created, warnings } = await findOrCreateClient(scope, body.client, session);
     // one purchase = one lead: warn when this client already has an open lead with this brand (PLAN §13)
     if (!created && body.confirm_new_purchase !== true) {
-      const open = await Lead.findOne({ tenant_id: scope.tenantId, client_id: client._id, brand_id: brandId, stage: { $in: OPEN_STAGES } }).select('lead_no stage').session(session).lean();
+      const open = await Lead.findOne({ tenant_id: scope.tenantId, client_id: client._id, brand_id: brandId, stage_type: 'open' }).select('lead_no stage').session(session).lean();
       if (open) {
         throw conflict(`${client.name || client.phone_e164} already has open lead ${open.lead_no} with ${brand.name}. Add the products there, or send confirm_new_purchase: true if this is a separate purchase.`,
           { code: 'open_lead_exists', lead_id: open._id, lead_no: open.lead_no });
@@ -131,7 +130,7 @@ export async function createLead(scope, body = {}) {
     }
     const lead = {
       _id: new mongoose.Types.ObjectId(), tenant_id: scope.tenantId, lead_no: `LD-${await nextNumber(`${scope.tenantId}:lead`, session, 1000)}`,
-      client_id: client._id, brand_id: brandId, owner_id: ownerId, stage: 'New', fields, items, intake_method: intake, created_by: scope.user._id, version: 1,
+      client_id: client._id, brand_id: brandId, owner_id: ownerId, stage: rb.pipeline.open[0], stage_type: 'open', fields, items, intake_method: intake, created_by: scope.user._id, version: 1,
     };
     Object.assign(lead, gapCounts(gapsFor(lead, client, rb)));
     await Lead.create([lead], { session });
@@ -227,15 +226,22 @@ export async function updateLead(scope, leadId, body = {}) {
 /** body: { version, to, reason?, override? }. Won converts to an order (services/conversion.js). */
 export async function moveStage(scope, leadId, body = {}) {
   const version = requireVersion(body);
-  const to = oneOf(body.to, 'to', LEAD_PIPELINE, { required: true });
+  const asked = str(body.to, 'to', { required: true, max: 40 });
   const reason = str(body.reason, 'reason', { max: 500 });
+  let to = asked;
   const result = await withTransaction(async (session) => {
     const lead = await getLead(scope, leadId, session);
     requireEditable(lead);
     if (lead.version !== version) throw conflict('Someone else changed this lead just now. Reload it and try again.', { code: 'version_conflict', current_version: lead.version });
-    if (lead.stage === to) throw badRequest(`The lead is already in ${to}`);
-    const from = LEAD_PIPELINE.indexOf(lead.stage), target = LEAD_PIPELINE.indexOf(to);
     const rb = await loadBrandRules(scope.tenantId, lead.brand_id);
+    const { flow, won, lost } = rb.pipeline;
+    to = flow.find((s) => s.toLowerCase() === asked.toLowerCase());
+    if (!to) {
+      if (asked.toLowerCase() === lost.toLowerCase()) throw badRequest(`Use "mark lost" to move a lead to ${lost}: it needs a reason`);
+      throw badRequest(`"${asked}" is not a stage of ${rb.brand.name}. Stages: ${flow.join(', ')}`);
+    }
+    if (lead.stage === to) throw badRequest(`The lead is already in ${to}`);
+    const from = flow.indexOf(lead.stage), target = flow.indexOf(to);
     const client = await Client.findById(lead.client_id).session(session).lean();
     const rec = { recordType: 'lead', stage: lead.stage, lead, client };
 
@@ -243,11 +249,8 @@ export async function moveStage(scope, leadId, body = {}) {
       if (!reason) throw badRequest('Say why the lead is moving back (reason)');
     } else {
       const blockers = blockersForMove(rec, rb, to);
-      if (to === 'Won') {
-        const brand = await Brand.findById(lead.brand_id).lean();
-        if (brand.defaults?.won_requires_payment_received && !lead.fields.payment_received_date) {
-          blockers.push({ field: 'payment_received_date', label: 'Payment received date', level: 'blocking', stage: 'Awaiting payment', hint: `${brand.name} requires proof of payment before Won` });
-        }
+      if (to === won && rb.brand.defaults?.won_requires_payment_received && !lead.fields.payment_received_date) {
+        blockers.push({ field: 'payment_received_date', label: 'Payment received date', level: 'blocking', stage: rb.pipeline.open.at(-1), hint: `${rb.brand.name} requires proof of payment before ${won}` });
       }
       if (blockers.length) {
         const override = body.override === true;
@@ -258,7 +261,7 @@ export async function moveStage(scope, leadId, body = {}) {
       }
     }
 
-    if (to === 'Won') {
+    if (to === won) {
       const { winLead } = await import('./conversion.js');
       return winLead(session, scope, lead, client, rb, { reason, overridden: rec.overridden });
     }
@@ -284,10 +287,11 @@ export async function markLost(scope, leadId, body = {}) {
   return withTransaction(async (session) => {
     const lead = await getLead(scope, leadId, session);
     requireEditable(lead);
+    const { lost } = (await loadBrandRules(scope.tenantId, lead.brand_id)).pipeline;
     await commitWrite(session, scope, 'lead', { ...lead, version }, {
-      $set: { stage: 'Lost', stage_before_lost: lead.stage, stage_changed_at: new Date(), lost_reason: reason, lost_note: note, lost_at: new Date(), open_gap_count: 0, blocking_gap_count: 0 },
-    }, { type: 'lead.lost', changes: [{ field: 'stage', scope: 'lead', old: lead.stage, new: 'Lost' }, { field: 'lost_reason', scope: 'lead', old: null, new: reason }], reason: note });
-    return { id: lead._id, stage: 'Lost' };
+      $set: { stage: lost, stage_type: 'lost', stage_before_lost: lead.stage, stage_changed_at: new Date(), lost_reason: reason, lost_note: note, lost_at: new Date(), open_gap_count: 0, blocking_gap_count: 0 },
+    }, { type: 'lead.lost', changes: [{ field: 'stage', scope: 'lead', old: lead.stage, new: lost }, { field: 'lost_reason', scope: 'lead', old: null, new: reason }], reason: note });
+    return { id: lead._id, stage: lost };
   });
 }
 
@@ -295,17 +299,18 @@ export async function reopenLead(scope, leadId, body = {}) {
   const version = requireVersion(body);
   return withTransaction(async (session) => {
     const lead = await getLead(scope, leadId, session);
-    if (lead.stage !== 'Lost') throw badRequest('Only a Lost lead can be reopened');
+    if (lead.stage_type !== 'lost') throw badRequest('Only a lost lead can be reopened');
     const isOwner = String(lead.owner_id) === String(scope.user._id);
     if (!isOwner && !['admin', 'pod_lead'].includes(scope.user.role)) throw forbidden('Only the owner or a pod lead can reopen this lead');
     if (Date.now() - new Date(lead.lost_at).getTime() > REOPEN_WINDOW_DAYS * 86400000) throw badRequest(`Leads can be reopened within ${REOPEN_WINDOW_DAYS} days of being lost. Create a new lead instead.`);
-    const to = lead.stage_before_lost || 'New';
     const rb = await loadBrandRules(scope.tenantId, lead.brand_id);
+    // back to where it was, or the first stage if the brand's pipeline no longer has that stage
+    const to = rb.pipeline.open.includes(lead.stage_before_lost) ? lead.stage_before_lost : rb.pipeline.open[0];
     const client = await Client.findById(lead.client_id).session(session).lean();
     await commitWrite(session, scope, 'lead', { ...lead, version }, {
-      $set: { stage: to, stage_changed_at: new Date(), lost_reason: null, lost_note: null, lost_at: null, ...gapCounts(gapsFor({ ...lead, stage: to }, client, rb)) },
+      $set: { stage: to, stage_type: 'open', stage_changed_at: new Date(), lost_reason: null, lost_note: null, lost_at: null, ...gapCounts(gapsFor({ ...lead, stage: to, stage_type: 'open' }, client, rb)) },
       $inc: { reopened_count: 1 },
-    }, { type: 'lead.reopened', changes: [{ field: 'stage', scope: 'lead', old: 'Lost', new: to }], reason: str(body.reason, 'reason', { max: 500 }) });
+    }, { type: 'lead.reopened', changes: [{ field: 'stage', scope: 'lead', old: lead.stage, new: to }], reason: str(body.reason, 'reason', { max: 500 }) });
     return { id: lead._id, stage: to };
   });
 }

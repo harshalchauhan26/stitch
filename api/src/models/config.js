@@ -13,6 +13,7 @@ const ConditionSchema = new Schema({
 
 const FieldDefSchema = new Schema({
   tenant_id: tenantRef,
+  brand_id: { type: ObjectId, ref: 'Brand', default: null },   // null = shared catalogue field; set = a brand's custom field
   key: { type: String, required: true, match: /^[a-z][a-z0-9_]*$/ },
   label: { type: String, required: true },
   scope: { type: String, enum: FIELD_SCOPES, required: true },
@@ -30,6 +31,7 @@ const FieldDefSchema = new Schema({
   active: { type: Boolean, default: true },
 }, baseOptions('field_defs'));
 FieldDefSchema.index({ tenant_id: 1, key: 1 }, { unique: true });
+FieldDefSchema.index({ tenant_id: 1, brand_id: 1 });
 
 const RuleSchema = new Schema({
   record_type: { type: String, enum: ['lead', 'order'], required: true },
@@ -45,6 +47,7 @@ const BrandTemplateSchema = new Schema({
   name: { type: String, required: true },
   category: { type: String, default: null },
   field_keys: { type: [String], default: [] },
+  lead_pipeline: { type: [{ _id: false, name: String, type: { type: String } }], default: undefined },
   rules: { type: [RuleSchema], default: [] },
 }, baseOptions('brand_templates'));
 BrandTemplateSchema.index({ tenant_id: 1, key: 1 }, { unique: true });

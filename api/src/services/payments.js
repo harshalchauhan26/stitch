@@ -47,7 +47,7 @@ export function orderMoney(total, payments) {
 
 /** Recalculates the lead's payment fields inside the transaction and records why. */
 export async function syncLeadPayments(session, scope, lead, event) {
-  if (lead.stage === 'Won' || lead.stage === 'Lost') return lead.version;
+  if (lead.stage_type !== 'open') return lead.version;
   const payments = await Payment.find({ lead_id: lead._id, tenant_id: lead.tenant_id }).session(session).lean();
   const computed = leadPaymentFields(payments);
   const fields = { ...lead.fields };
@@ -112,8 +112,8 @@ export async function addLeadPayment(scope, leadId, body = {}) {
   await refuseDuplicateRef(scope.tenantId, p.transaction_ref);
   return withTransaction(async (session) => {
     const lead = await getLead(scope, leadId, session);
-    if (lead.stage === 'Lost') throw conflict('This lead is Lost. Reopen it first.');
-    if (lead.stage === 'Won') throw conflict('This lead is Won: record payments on its order.', { code: 'lead_locked', order_id: lead.converted_order_id });
+    if (lead.stage_type === 'lost') throw conflict(`This lead is ${lead.stage}. Reopen it first.`);
+    if (lead.stage_type === 'won') throw conflict(`This lead is ${lead.stage}: record payments on its order.`, { code: 'lead_locked', order_id: lead.converted_order_id });
     const [payment] = await Payment.create([{ ...p, tenant_id: scope.tenantId, brand_id: lead.brand_id, client_id: lead.client_id, lead_id: lead._id, recorded_by: scope.user._id }], { session });
     await syncLeadPayments(session, scope, lead, { type: 'payment.recorded', data: { payment_id: payment._id, kind: p.kind, amount: p.amount, status: p.status } });
     return payment;

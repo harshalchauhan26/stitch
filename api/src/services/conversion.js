@@ -35,7 +35,7 @@ export function orderCreatedPayload({ order, brand, client, owner, team, leadNo 
 
 export async function winLead(session, scope, lead, client, rb, { reason, overridden } = {}) {
   const items = lead.items.filter((i) => !i.removed_at);
-  if (!items.length) throw badRequest('Add at least one product before marking the lead Won');
+  if (!items.length) throw badRequest(`Add at least one product before moving the lead to ${rb.pipeline.won}`);
   const brand = await Brand.findById(lead.brand_id).session(session).lean();
   const orderId = new ObjectId();
   const orderNo = `ORD-${brand.code}-${await nextNumber(`${lead.tenant_id}:order:${brand.code}`, session, 2000)}`;
@@ -82,9 +82,9 @@ export async function winLead(session, scope, lead, client, rb, { reason, overri
   await Payment.updateMany({ lead_id: lead._id, tenant_id: lead.tenant_id }, { $set: { order_id: orderId } }, { session });
 
   await commitWrite(session, scope, 'lead', lead, {
-    $set: { stage: 'Won', stage_changed_at: new Date(), converted_order_id: orderId, open_gap_count: 0, blocking_gap_count: 0 },
+    $set: { stage: rb.pipeline.won, stage_type: 'won', stage_changed_at: new Date(), converted_order_id: orderId, open_gap_count: 0, blocking_gap_count: 0 },
   }, {
-    type: 'lead.won', changes: [{ field: 'stage', scope: 'lead', old: lead.stage, new: 'Won' }], reason,
+    type: 'lead.won', changes: [{ field: 'stage', scope: 'lead', old: lead.stage, new: rb.pipeline.won }], reason,
     data: { order_id: orderId, order_no: orderNo, ...(overridden ? { overridden: overridden.map((g) => g.field) } : {}) },
   });
   await writeEvent(session, scope, 'order', order, { type: 'order.created', source: 'system', data: { lead_id: lead._id, lead_no: lead.lead_no } }, 1);
@@ -106,5 +106,5 @@ export async function winLead(session, scope, lead, client, rb, { reason, overri
       tenant_id: lead.tenant_id, user_id: m._id, type: 'order.created', title: `${orderNo} created for ${client.name || client.phone_e164} (${brand.name})`, link: `/orders/${orderId}`,
     })), { session });
   }
-  return { id: lead._id, stage: 'Won', order_id: orderId, order_no: orderNo };
+  return { id: lead._id, stage: rb.pipeline.won, order_id: orderId, order_no: orderNo };
 }

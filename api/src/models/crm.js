@@ -1,6 +1,6 @@
 // Clients, leads (with items), the audit trail, issues, conversations and messages (PLAN §5.6-5.11)
 import mongoose from 'mongoose';
-import { EVENT_SOURCES, INTAKE_METHODS, ISSUE_TYPES, LEAD_STAGES, LOST_REASONS } from '../lib/constants.js';
+import { EVENT_SOURCES, INTAKE_METHODS, ISSUE_TYPES, LOST_REASONS, STAGE_TYPES } from '../lib/constants.js';
 import { ActorSchema, ChangeSchema, Mixed, ObjectId, Schema, baseOptions, tenantRef } from './common.js';
 
 // One real person, identified by phone. No brand: a person can buy from several brands.
@@ -37,7 +37,8 @@ const LeadSchema = new Schema({
   client_id: { type: ObjectId, ref: 'Client', required: true },
   brand_id: { type: ObjectId, ref: 'Brand', required: true },
   owner_id: { type: ObjectId, ref: 'User', required: true },
-  stage: { type: String, enum: LEAD_STAGES, default: 'New' },
+  stage: { type: String, required: true },                // a stage name from the brand's lead_pipeline
+  stage_type: { type: String, enum: STAGE_TYPES, default: 'open' },
   stage_changed_at: { type: Date, default: Date.now },
   stage_before_lost: { type: String, default: null },      // where a reopened lead goes back to
   fields: { type: Mixed, default: () => ({}) },           // lead-scope values, keys from field_defs
@@ -56,6 +57,7 @@ const LeadSchema = new Schema({
 }, baseOptions('leads'));
 LeadSchema.index({ tenant_id: 1, lead_no: 1 }, { unique: true });
 LeadSchema.index({ tenant_id: 1, brand_id: 1, stage: 1 });
+LeadSchema.index({ tenant_id: 1, client_id: 1, brand_id: 1, stage_type: 1 });
 LeadSchema.index({ tenant_id: 1, owner_id: 1, stage: 1 });
 LeadSchema.index({ tenant_id: 1, client_id: 1 });
 LeadSchema.index({ tenant_id: 1, 'fields.event_date': 1 });

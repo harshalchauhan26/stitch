@@ -1,10 +1,11 @@
 // Field catalogue, templates and "Set Required" (spec §5.5, PLAN §14 Settings)
 import { Router } from 'express';
 import { GATE_FIELDS } from '../catalogue.js';
-import { LEVELS, pipelineOf } from '../lib/constants.js';
+import { LEVELS } from '../lib/constants.js';
 import { badRequest, forbidden } from '../lib/errors.js';
 import { id, oneOf } from '../lib/validate.js';
-import { AuditLog, BrandTemplate, FieldDef, RequiredRule } from '../models/index.js';
+import { AuditLog, Brand, BrandTemplate, FieldDef, RequiredRule } from '../models/index.js';
+import { brandFields, createCustomField, CUSTOM_LEVELS, stagesFor, updateBrandField, updatePipeline } from '../services/brandConfig.js';
 import { actorFor, requireBrand, requireRole } from '../services/scope.js';
 
 export const settingsRouter = Router();
@@ -15,7 +16,7 @@ const defDto = (d) => ({
 });
 
 settingsRouter.get('/field-defs', async (req, res) => {
-  res.json((await FieldDef.find({ tenant_id: req.scope.tenantId, active: true }).sort({ scope: 1, key: 1 }).lean()).map(defDto));
+  res.json((await FieldDef.find({ tenant_id: req.scope.tenantId, active: true, brand_id: null }).sort({ scope: 1, key: 1 }).lean()).map(defDto));
 });
 
 settingsRouter.get('/templates', async (req, res) => {
@@ -28,8 +29,8 @@ const ruleDto = (r) => ({ record_type: r.record_type, stage: r.stage, field: r.f
 settingsRouter.get('/brands/:id/rules', async (req, res) => {
   const brandId = id(req.params.id);
   requireBrand(req.scope, brandId);
-  const rules = await RequiredRule.find({ tenant_id: req.scope.tenantId, brand_id: brandId }).lean();
-  const order = (r) => pipelineOf(r.record_type).indexOf(r.stage);
+  const [rules, brand] = await Promise.all([RequiredRule.find({ tenant_id: req.scope.tenantId, brand_id: brandId }).lean(), Brand.findById(brandId).lean()]);
+  const order = (r) => stagesFor(brand, r.record_type).indexOf(r.stage);
   rules.sort((a, b) => a.record_type.localeCompare(b.record_type) || order(a) - order(b) || a.field.localeCompare(b.field));
   res.json(rules.map(ruleDto));
 });
@@ -44,15 +45,16 @@ settingsRouter.put('/brands/:id/rules', async (req, res) => {
   requireRole(req.scope, 'admin', 'pod_lead');
   const list = req.body?.rules;
   if (!Array.isArray(list) || !list.length) throw badRequest('rules must be a non-empty list');
-  const defs = new Map((await FieldDef.find({ tenant_id: req.scope.tenantId }).lean()).map((d) => [d.key, d]));
+  const brand = await Brand.findOne({ _id: brandId, tenant_id: req.scope.tenantId }).lean();
+  const defs = new Map((await FieldDef.find({ tenant_id: req.scope.tenantId, brand_id: { $in: [null, brandId] } }).lean()).map((d) => [d.key, d]));
   const actor = actorFor(req.scope, brandId);
   const results = [];
   for (const raw of list) {
     const record_type = oneOf(raw.record_type, 'record_type', ['lead', 'order'], { required: true });
-    const stage = oneOf(raw.stage, 'stage', pipelineOf(record_type), { required: true });
+    const stage = oneOf(raw.stage, 'stage', stagesFor(brand, record_type), { required: true });
     const def = defs.get(raw.field);
     if (!def || !def.record_types.includes(record_type)) throw badRequest(`Field "${raw.field}" does not exist for ${record_type}s`);
-    const level = raw.level === null ? null : oneOf(raw.level, 'level', LEVELS, { required: true });
+    const level = raw.level === null ? null : oneOf(raw.level, 'level', def.brand_id ? CUSTOM_LEVELS : LEVELS, { required: true });
     const key = { tenant_id: req.scope.tenantId, brand_id: brandId, record_type, stage, field: def.key };
     const existing = await RequiredRule.findOne(key).lean();
     // a gate field is protected wherever it is defined, not just on its original rule
@@ -74,4 +76,23 @@ settingsRouter.put('/brands/:id/rules', async (req, res) => {
     results.push(ruleDto(r));
   }
   res.json(results.map((r) => ({ record_type: r.record_type, stage: r.stage, field: r.field, level: r.level })));
+});
+
+// ---------- per-brand setup: the lead pipeline and the brand's own fields ----------
+settingsRouter.get('/brands/:id/pipeline', async (req, res) => res.json((await brandFields(req.scope, id(req.params.id))).pipeline));
+settingsRouter.put('/brands/:id/pipeline', async (req, res) => {
+  requireRole(req.scope, 'admin', 'pod_lead');
+  res.json(await updatePipeline(req.scope, id(req.params.id), req.body?.stages));
+});
+
+settingsRouter.get('/brands/:id/fields', async (req, res) => res.json(await brandFields(req.scope, id(req.params.id))));
+settingsRouter.post('/brands/:id/fields', async (req, res) => {
+  requireRole(req.scope, 'admin', 'pod_lead');
+  await createCustomField(req.scope, id(req.params.id), req.body);
+  res.status(201).json(await brandFields(req.scope, id(req.params.id)));
+});
+settingsRouter.patch('/brands/:id/fields/:key', async (req, res) => {
+  requireRole(req.scope, 'admin', 'pod_lead');
+  await updateBrandField(req.scope, id(req.params.id), String(req.params.key), req.body);
+  res.json(await brandFields(req.scope, id(req.params.id)));
 });

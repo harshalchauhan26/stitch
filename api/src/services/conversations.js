@@ -76,7 +76,7 @@ export async function uploadConversation(scope, body = {}) {
       message_count: all[0]?.n ?? 0, customer_message_count: all[0]?.c ?? 0, first_msg_at: all[0]?.first ?? null, last_msg_at: all[0]?.last ?? null,
       ...(existing ? { file_name: fileName, content_hash: hash } : {}),
     } }, { session });
-    const openLeads = await Lead.find({ tenant_id: scope.tenantId, client_id: client._id, brand_id: account.brand_id, stage: { $nin: ['Won', 'Lost'] } }).select('lead_no stage').session(session).lean();
+    const openLeads = await Lead.find({ tenant_id: scope.tenantId, client_id: client._id, brand_id: account.brand_id, stage_type: 'open' }).select('lead_no stage').session(session).lean();
     return { id: conv._id, created: !existing, appended: existing ? fresh.length : 0, messages: fresh.length, warnings, suggested_leads: openLeads.map((l) => ({ id: l._id, lead_no: l.lead_no, stage: l.stage })) };
   });
 }

@@ -2,10 +2,15 @@
 
 export const ROLES = ['admin', 'pod_lead', 'sales', 'ops', 'qc'];
 
-export const LEAD_STAGES = ['New', 'Qualifying', 'Customising', 'Quoted', 'Awaiting payment', 'Won', 'Lost'];
-export const LEAD_PIPELINE = LEAD_STAGES.slice(0, 6);          // Lost sits outside the pipeline
+// The lead pipeline is per brand (brand.lead_pipeline). This is the default from the spec; every stage has a type:
+// open stages are worked through in order, the won stage creates the order, the lost stage closes the lead.
+export const DEFAULT_LEAD_PIPELINE = [
+  { name: 'New', type: 'open' }, { name: 'Qualifying', type: 'open' }, { name: 'Customising', type: 'open' },
+  { name: 'Quoted', type: 'open' }, { name: 'Awaiting payment', type: 'open' }, { name: 'Won', type: 'won' }, { name: 'Lost', type: 'lost' },
+];
+export const STAGE_TYPES = ['open', 'won', 'lost'];
+// The order pipeline is the agency's own fulfilment process: the same for every brand.
 export const ORDER_STAGES = ['Created', 'Spec locked', 'Measurements', 'Production', 'QC approval', 'Ready to ship', 'Dispatched', 'Delivered'];
-export const pipelineOf = (recordType) => (recordType === 'lead' ? LEAD_PIPELINE : ORDER_STAGES);
 
 export const LEVELS = ['optional', 'needed', 'blocking'];
 export const FIELD_SCOPES = ['client', 'lead', 'item', 'order'];

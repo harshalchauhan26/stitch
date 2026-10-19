@@ -36,7 +36,7 @@ conversationsRouter.get('/conversations/:id', async (req, res) => {
 
 conversationsRouter.get('/conversations/:id/suggestions', async (req, res) => {
   const c = await getConversation(req.scope, req.params.id);
-  const leads = await Lead.find({ tenant_id: req.scope.tenantId, client_id: c.client_id, brand_id: c.brand_id, stage: { $nin: ['Won', 'Lost'] } }).select('lead_no stage items.product items.removed_at fields.event_date').lean();
+  const leads = await Lead.find({ tenant_id: req.scope.tenantId, client_id: c.client_id, brand_id: c.brand_id, stage_type: 'open' }).select('lead_no stage items.product items.removed_at fields.event_date').lean();
   res.json(leads.map((l) => ({ id: l._id, lead_no: l.lead_no, stage: l.stage, event_date: l.fields?.event_date ?? null, products: l.items.filter((i) => !i.removed_at).map((i) => i.product) })));
 });
 

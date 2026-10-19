@@ -5,6 +5,7 @@ import { badRequest, conflict, notFound } from '../lib/errors.js';
 import { brandNameKey, editDistance, instagramKey, requirePhone, websiteKey } from '../lib/normalise.js';
 import { str, oneOf, ids, bool, int } from '../lib/validate.js';
 import { Brand, BrandTemplate, RequiredRule, Team, User, WhatsappAccount } from '../models/index.js';
+import { mapByPosition, pipelineOf, validatePipeline } from './pipeline.js';
 
 const SIMILAR_DISTANCE = 2;
 
@@ -67,13 +68,27 @@ export async function checkBrand(tenantId, input, excludeId = null) {
   return { conflicts, similar };
 }
 
-/** Copies the template's rules onto the brand. The six gate fields are locked (spec §5.5). */
-async function copyTemplateRules(session, tenantId, brandId, template) {
-  if (!template.rules.length) return;
-  await RequiredRule.insertMany(template.rules.map((r) => ({
-    tenant_id: tenantId, brand_id: brandId, record_type: r.record_type, stage: r.stage, field: r.field, level: r.level,
-    applies_when: r.applies_when ?? null, locked: r.level === 'blocking' && GATE_FIELDS.includes(r.field),
-  })), { session });
+const LEVEL_RANK = { optional: 0, needed: 1, blocking: 2 };
+
+/**
+ * Copies the template's rules onto the brand. The six gate fields are locked (spec §5.5).
+ * With a custom pipeline, each lead rule lands on the stage at the same relative position (the payment gate stays on the
+ * stage before Won); the brand's SOP can then be adjusted in Settings.
+ */
+async function copyTemplateRules(session, tenantId, brandId, template, pipeline) {
+  const fromOpen = pipelineOf({ lead_pipeline: template.lead_pipeline }).open;
+  const rules = new Map();
+  for (const r of template.rules) {
+    const stage = r.record_type === 'lead' ? mapByPosition(fromOpen, pipeline.open, r.stage) : r.stage;
+    const k = `${r.record_type}|${stage}|${r.field}`;
+    const prev = rules.get(k);
+    if (prev && LEVEL_RANK[prev.level] >= LEVEL_RANK[r.level]) continue;
+    rules.set(k, {
+      tenant_id: tenantId, brand_id: brandId, record_type: r.record_type, stage, field: r.field, level: r.level,
+      applies_when: r.applies_when ?? null, locked: r.level === 'blocking' && GATE_FIELDS.includes(r.field),
+    });
+  }
+  if (rules.size) await RequiredRule.insertMany([...rules.values()], { session });
 }
 
 export async function createBrand(scope, body) {
@@ -90,6 +105,8 @@ export async function createBrand(scope, body) {
   if (!brandNameKey(input.name)) throw badRequest('Name must contain letters or digits');
   const template = await BrandTemplate.findOne({ tenant_id: scope.tenantId, key: input.template_key }).lean();
   if (!template) throw badRequest(`Unknown template "${input.template_key}"`);
+  // the brand's own lead pipeline, or the template's (the spec's stages by default)
+  const pipeline = pipelineOf({ lead_pipeline: body.lead_pipeline ? validatePipeline(body.lead_pipeline) : template.lead_pipeline });
   const phones = [...new Map(input.phones.map((p) => { const x = requirePhone(p, 'WhatsApp number'); return [x.e164, x]; })).values()];
   const teams = input.team_ids.length ? await Team.find({ tenant_id: scope.tenantId, _id: { $in: input.team_ids } }).lean() : [];
   if (teams.length !== input.team_ids.length) throw badRequest('One of the teams does not exist');
@@ -104,7 +121,7 @@ export async function createBrand(scope, body) {
     const [brand] = await Brand.create([{
       tenant_id: scope.tenantId, code: input.code, name: input.name, name_key: brandNameKey(input.name),
       instagram: input.instagram, instagram_key: instagramKey(input.instagram), website: input.website, website_key: websiteKey(input.website),
-      template_key: template.key, category: template.category,
+      template_key: template.key, category: template.category, lead_pipeline: pipeline.stages,
       contact: { email: str(body.contact?.email, 'Contact email', { max: 200 }), phone: str(body.contact?.phone, 'Contact phone', { max: 40 }) },
       defaults: {
         currency: oneOf(body.defaults?.currency, 'Currency', ['INR', 'USD', 'GBP', 'AED', 'EUR']) ?? 'INR',
@@ -114,7 +131,7 @@ export async function createBrand(scope, body) {
       },
       onboarded_by: scope.user._id,
     }], { session });
-    await copyTemplateRules(session, scope.tenantId, brand._id, template);
+    await copyTemplateRules(session, scope.tenantId, brand._id, template, pipeline);
     if (phones.length) {
       await WhatsappAccount.insertMany(phones.map((p) => ({ tenant_id: scope.tenantId, brand_id: brand._id, phone_e164: p.e164, display_name: brand.name })), { session });
     }
@@ -167,6 +184,6 @@ export async function addWhatsappAccount(scope, brandId, body) {
 }
 
 export const brandDto = (b, extra = {}) => ({
-  id: b._id, code: b.code, name: b.name, status: b.status, template_key: b.template_key, category: b.category,
+  id: b._id, code: b.code, name: b.name, status: b.status, template_key: b.template_key, category: b.category, lead_pipeline: pipelineOf(b).stages,
   instagram: b.instagram, website: b.website, contact: b.contact, defaults: b.defaults, created_at: b.created_at, ...extra,
 });

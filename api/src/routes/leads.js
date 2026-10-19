@@ -1,6 +1,5 @@
 // Leads, gaps (the to-do list) and the audit trail (PLAN §7-9, §14)
 import { Router } from 'express';
-import { LEAD_PIPELINE, LEAD_STAGES } from '../lib/constants.js';
 import { badRequest } from '../lib/errors.js';
 import { id, int, oneOf, str, todayIso } from '../lib/validate.js';
 import { Brand, Client, Lead, LeadEvent, User } from '../models/index.js';
@@ -20,7 +19,7 @@ const itemDto = (i) => ({ id: i._id, product: i.product, product_id: i.product_i
 /** Which fields this brand asks for at each stage, for the lead form (first stage that asks wins) */
 function layout(rb) {
   const seen = new Set();
-  return LEAD_PIPELINE.slice(0, 5).map((stage) => ({
+  return rb.pipeline.open.map((stage) => ({
     stage,
     fields: rb.rules.lead.filter((r) => r.stage === stage && !seen.has(r.field) && seen.add(r.field)).map((r) => {
       const d = rb.defs.get(r.field);
@@ -37,7 +36,7 @@ async function leadView(scope, lead) {
   ]);
   const gaps = computeGaps({ recordType: 'lead', stage: lead.stage, lead, client }, rb);
   return {
-    id: lead._id, lead_no: lead.lead_no, stage: lead.stage, version: lead.version,
+    id: lead._id, lead_no: lead.lead_no, stage: lead.stage, stage_type: lead.stage_type, version: lead.version, pipeline: rb.pipeline.stages,
     brand: { id: brand._id, code: brand.code, name: brand.name }, owner: owner && { id: owner._id, name: owner.name, initials: owner.initials },
     client: clientDto(client), fields: lead.fields, items: lead.items.filter((i) => !i.removed_at).map(itemDto),
     gaps, open_gap_count: gaps.length, blocking_gap_count: gaps.filter((g) => g.level === 'blocking').length, open_issue_count: lead.open_issue_count,
@@ -59,7 +58,8 @@ leadsRouter.get('/leads', async (req, res) => {
   const q = req.query;
   const filter = { tenant_id: tenantId, ...req.scope.brandFilter() };
   if (q.brand) { const b = id(q.brand, 'brand'); if (!req.scope.canSeeBrand(b)) return res.json({ total: 0, leads: [] }); filter.brand_id = b; }
-  if (q.stage) filter.stage = oneOf(q.stage, 'stage', LEAD_STAGES);
+  if (q.stage) filter.stage = str(q.stage, 'stage', { max: 40 });
+  if (q.stage_type) filter.stage_type = oneOf(q.stage_type, 'stage_type', ['open', 'won', 'lost']);
   if (q.owner) filter.owner_id = q.owner === 'me' ? req.scope.user._id : id(q.owner, 'owner');
   if (q.client) filter.client_id = id(q.client, 'client');
   const search = str(q.q, 'q', { max: 100 });
@@ -78,7 +78,7 @@ leadsRouter.get('/leads', async (req, res) => {
   ]).then((xs) => xs.map(byId));
   res.json({
     total, leads: leads.map((l) => ({
-      id: l._id, lead_no: l.lead_no, stage: l.stage, version: l.version,
+      id: l._id, lead_no: l.lead_no, stage: l.stage, stage_type: l.stage_type, version: l.version,
       client: { id: l.client_id, name: clients.get(String(l.client_id))?.name ?? null, phone: clients.get(String(l.client_id))?.phone_e164 },
       brand: { id: l.brand_id, code: brands.get(String(l.brand_id))?.code }, owner: { id: l.owner_id, initials: users.get(String(l.owner_id))?.initials },
       event_date: l.fields.event_date ?? null, days_to_event: daysTo(l.fields.event_date), products: l.items.filter((i) => !i.removed_at).map((i) => i.product),
@@ -129,7 +129,7 @@ leadsRouter.post('/leads/:id/undo/:eventId', async (req, res) => {
 /** The to-do list: every open gap on every open lead the caller can see, blocking first, then nearest event (spec §5.1) */
 leadsRouter.get('/gaps', async (req, res) => {
   const q = req.query;
-  const filter = { tenant_id: req.scope.tenantId, stage: { $in: LEAD_PIPELINE.slice(0, 5) }, open_gap_count: { $gt: 0 }, ...req.scope.brandFilter() };
+  const filter = { tenant_id: req.scope.tenantId, stage_type: 'open', open_gap_count: { $gt: 0 }, ...req.scope.brandFilter() };
   if (q.brand) { const b = id(q.brand, 'brand'); if (!req.scope.canSeeBrand(b)) return res.json([]); filter.brand_id = b; }
   if (q.owner) filter.owner_id = q.owner === 'me' ? req.scope.user._id : id(q.owner, 'owner');
   const level = oneOf(q.level, 'level', ['needed', 'blocking']);

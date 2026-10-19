@@ -1,6 +1,6 @@
 // Organisation: tenants, users, teams, brands, WhatsApp accounts (PLAN §4, §5.1-5.5)
 import mongoose from 'mongoose';
-import { ROLES } from '../lib/constants.js';
+import { DEFAULT_LEAD_PIPELINE, ROLES, STAGE_TYPES } from '../lib/constants.js';
 import { ObjectId, Schema, baseOptions, tenantRef, whenString } from './common.js';
 
 const TenantSchema = new Schema({
@@ -38,6 +38,11 @@ const TeamSchema = new Schema({
 TeamSchema.index({ tenant_id: 1, name: 1 }, { unique: true });
 TeamSchema.index({ tenant_id: 1, brand_ids: 1 });
 
+const StageSchema = new Schema({
+  name: { type: String, required: true, trim: true },
+  type: { type: String, enum: STAGE_TYPES, required: true },
+}, { _id: false });
+
 // *_key fields are normalised copies used only for the duplicate checks (PLAN §4.2)
 const BrandSchema = new Schema({
   tenant_id: tenantRef,
@@ -50,6 +55,7 @@ const BrandSchema = new Schema({
   website_key: { type: String, default: null },
   template_key: { type: String, required: true },
   category: { type: String, default: null },
+  lead_pipeline: { type: [StageSchema], default: () => DEFAULT_LEAD_PIPELINE.map((x) => ({ ...x })) },   // custom per brand
   contact: { email: { type: String, default: null }, phone: { type: String, default: null } },
   defaults: {
     currency: { type: String, default: 'INR' },
