@@ -1,0 +1,20 @@
+{
+  "name": "stitch-api",
+  "version": "0.1.0",
+  "description": "Stitch v1 backend on MongoDB (see docs/PLAN_v1.md)",
+  "type": "module",
+  "private": true,
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "mongo:dev": "node scripts/dev-mongo.js",
+    "seed:demo": "node scripts/seed-demo.js",
+    "test": "node --test --test-concurrency=1 tests/"
+  },
+  "dependencies": {
+    "cors": "2.8.6",
+    "express": "5.2.1",
+    "mongoose": "9.10.0"
+  }
+}

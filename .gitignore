@@ -9,3 +9,5 @@ backend/data/
 *.db-shm
 backend/check-*.mjs
 *.log
+# local MongoDB for the api (npm run mongo:dev)
+api/.mongo-data/
