@@ -164,15 +164,36 @@ describe('Won -> Order -> brand webhook', () => {
     assert.equal(bad.status, 400);
     order = ok(await t.api('PATCH', `/orders/${order.id}`, { version: order.version, fields: { customer_approval: 'Yes', qc_result: 'Pass', verified_shipping_address: '12 MG Road, Pune 411001', address_confirmed: 'Yes' } }, o.tokens.priya));
     order = ok(await move('Ready to ship'));
-    const noBalance = await move('Dispatched');
+    const noBalance = await t.api('POST', `/orders/${order.id}/dispatches`, { version: order.version, courier: 'Blue Dart' }, o.tokens.priya);
     assert.equal(noBalance.status, 422);
     assert.deepEqual(noBalance.body.blockers.map((g) => g.field), ['balance_payment']);
     ok(await t.api('POST', `/orders/${order.id}/payments`, { kind: 'balance', amount: 16000000, status: 'received', mode: 'UPI', transaction_ref: 'UPI-BAL-1' }, o.tokens.priya), 201);
     order = ok(await t.api('GET', `/orders/${order.id}`, undefined, o.tokens.priya));
     assert.equal(order.amounts.balance_due, 0);
     assert.equal(order.fields.balance_payment, 'Paid');
-    order = ok(await move('Dispatched'));
+    const byHand = await move('Dispatched');
+    assert.equal(byHand.status, 400, 'Dispatched follows the shipment, not a manual move');
+    assert.equal(byHand.body.code, 'use_shipments');
+    ok(await t.api('POST', `/orders/${order.id}/dispatches`, { version: order.version, courier: 'Blue Dart' }, o.tokens.priya), 201);
+    order = ok(await t.api('GET', `/orders/${order.id}`, undefined, o.tokens.priya));
     assert.equal(order.stage, 'Dispatched');
+  });
+
+  test('payment notes and link expiry edits are saved', async () => {
+    const p = order.payments[0];
+    ok(await t.api('PATCH', `/payments/${p.id}`, { notes: 'Paid by her brother', link_expires_at: '2026-11-01T00:00:00Z' }, o.tokens.priya));
+    const again = ok(await t.api('GET', `/orders/${order.id}`, undefined, o.tokens.priya)).payments.find((x) => x.id === p.id);
+    assert.equal(again.notes, 'Paid by her brother');
+    assert.equal(again.link.expires_at, '2026-11-01T00:00:00.000Z');
+  });
+
+  test('Redeliver really sends the event again, even after it was delivered', async () => {
+    received = [];
+    const box = await Outbox.findOne({ status: 'done' }).lean();
+    ok(await t.api('POST', `/outbox/${box._id}/redeliver`, {}, o.admin));
+    await drainOutbox();
+    assert.equal(received.length, 1);
+    assert.equal((await Outbox.findById(box._id).lean()).status, 'done');
   });
 });
 

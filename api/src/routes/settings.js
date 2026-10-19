@@ -6,6 +6,7 @@ import { badRequest, forbidden } from '../lib/errors.js';
 import { id, oneOf } from '../lib/validate.js';
 import { AuditLog, Brand, BrandTemplate, FieldDef, RequiredRule } from '../models/index.js';
 import { brandFields, createCustomField, CUSTOM_LEVELS, stagesFor, updateBrandField, updatePipeline } from '../services/brandConfig.js';
+import { recountLeads } from '../services/recount.js';
 import { actorFor, requireBrand, requireRole } from '../services/scope.js';
 
 export const settingsRouter = Router();
@@ -75,6 +76,7 @@ settingsRouter.put('/brands/:id/rules', async (req, res) => {
     await AuditLog.create({ tenant_id: req.scope.tenantId, actor, action: 'rule.changed', target_type: 'brand', target_id: brandId, changes: [{ field: `${record_type}/${stage}/${def.key}`, old: existing?.level ?? null, new: level }] });
     results.push(ruleDto(r));
   }
+  await recountLeads(req.scope.tenantId, { brand_id: brandId });   // what counts as a gap just changed
   res.json(results.map((r) => ({ record_type: r.record_type, stage: r.stage, field: r.field, level: r.level })));
 });
 
@@ -82,17 +84,21 @@ settingsRouter.put('/brands/:id/rules', async (req, res) => {
 settingsRouter.get('/brands/:id/pipeline', async (req, res) => res.json((await brandFields(req.scope, id(req.params.id))).pipeline));
 settingsRouter.put('/brands/:id/pipeline', async (req, res) => {
   requireRole(req.scope, 'admin', 'pod_lead');
-  res.json(await updatePipeline(req.scope, id(req.params.id), req.body?.stages));
+  const stages = await updatePipeline(req.scope, id(req.params.id), req.body?.stages);
+  await recountLeads(req.scope.tenantId, { brand_id: id(req.params.id) });
+  res.json(stages);
 });
 
 settingsRouter.get('/brands/:id/fields', async (req, res) => res.json(await brandFields(req.scope, id(req.params.id))));
 settingsRouter.post('/brands/:id/fields', async (req, res) => {
   requireRole(req.scope, 'admin', 'pod_lead');
   await createCustomField(req.scope, id(req.params.id), req.body);
+  await recountLeads(req.scope.tenantId, { brand_id: id(req.params.id) });
   res.status(201).json(await brandFields(req.scope, id(req.params.id)));
 });
 settingsRouter.patch('/brands/:id/fields/:key', async (req, res) => {
   requireRole(req.scope, 'admin', 'pod_lead');
   await updateBrandField(req.scope, id(req.params.id), String(req.params.key), req.body);
+  await recountLeads(req.scope.tenantId, { brand_id: id(req.params.id) });
   res.json(await brandFields(req.scope, id(req.params.id)));
 });

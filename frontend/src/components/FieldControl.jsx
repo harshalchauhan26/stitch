@@ -1,9 +1,10 @@
+import { useState } from 'react';
 import { inr, toPaise, toRupees } from '../lib/format.js';
 
 const LEVEL = { blocking: ['red', 'Blocking'], needed: ['amb', 'Needed'], optional: [null, 'Optional'] };
 export const LevelChip = ({ level }) => (LEVEL[level] ? <span className={`chip ${LEVEL[level][0] || ''}`} style={{ fontSize: 10, height: 18 }}>{LEVEL[level][1]}</span> : null);
 
-/** The value as the API wants it, from what was typed. Returns undefined when nothing changed. */
+/** The value as the API wants it, from what was typed: null clears the field, NaN means "not a valid amount". */
 export function fromInput(def, raw) {
   const s = typeof raw === 'string' ? raw.trim() : raw;
   if (s === '' || s == null) return null;
@@ -24,8 +25,12 @@ const display = (def, v) => {
  */
 export default function FieldControl({ def, value, onSave, disabled }) {
   const shown = display(def, value);
+  const [bad, setBad] = useState(null);
   const save = (raw) => {
     const v = fromInput(def, raw);
+    // "95k" is not an amount: say so instead of sending it (NaN would reach the API as null and clear the field)
+    if (typeof v === 'number' && Number.isNaN(v)) { setBad(def.type === 'currency' ? 'Enter an amount in rupees, e.g. 95000' : 'Enter a number'); return; }
+    setBad(null);
     if (String(v ?? '') !== String(value ?? '')) onSave(def.key, v);
   };
   if (def.computed) {
@@ -46,8 +51,11 @@ export default function FieldControl({ def, value, onSave, disabled }) {
   const type = def.type === 'date' ? 'date' : 'text';
   const ph = def.type === 'currency' ? '₹ amount' : def.unit ? def.unit : def.type === 'url' ? 'https://' : '';
   return (
-    <input className="inp" type={type} aria-label={def.label} defaultValue={shown} key={`${def.key}-${shown}`} placeholder={ph} disabled={disabled}
-      inputMode={['number', 'currency'].includes(def.type) ? 'decimal' : undefined}
-      onBlur={(e) => save(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && e.target.blur()} />
+    <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+      <input className={`inp${bad ? ' err' : ''}`} type={type} aria-label={def.label} defaultValue={shown} key={`${def.key}-${shown}`} placeholder={ph} disabled={disabled}
+        inputMode={['number', 'currency'].includes(def.type) ? 'decimal' : undefined} title={bad || undefined}
+        onBlur={(e) => save(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && e.target.blur()} />
+      {bad && <span className="err-t">{bad}</span>}
+    </span>
   );
 }

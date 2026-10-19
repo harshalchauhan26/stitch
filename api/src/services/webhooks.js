@@ -40,7 +40,8 @@ async function deliver(item) {
     await Outbox.updateOne({ _id: item._id }, { $set: { status: 'done', locked_until: null, last_error: 'No webhook endpoint set up for this brand' } });
     return;
   }
-  const done = new Set((await WebhookDelivery.distinct('endpoint_id', { outbox_id: item._id, status_code: { $gte: 200, $lt: 300 } })).map(String));
+  const okSince = { outbox_id: item._id, status_code: { $gte: 200, $lt: 300 }, ...(item.redeliver_from ? { request_at: { $gte: item.redeliver_from } } : {}) };
+  const done = new Set((await WebhookDelivery.distinct('endpoint_id', okSince)).map(String));
   const attempt = item.attempts + 1;
   let failed = null;
   for (const ep of endpoints.filter((e) => !done.has(String(e._id)))) {

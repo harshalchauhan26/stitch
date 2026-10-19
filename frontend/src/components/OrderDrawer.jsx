@@ -103,7 +103,8 @@ export default function OrderDrawer({ id, onClose, onChanged }) {
           </div>
           <div className="stg">{ORDER_STAGES.map((s, i) => <span key={s} className={i < idx ? 'past' : i === idx ? 'cur' : ''}>{s}</span>)}</div>
           <div style={{ display: 'flex', gap: 8 }}>
-            {next && <button type="button" className="btn pri" onClick={() => move(next)}>Move to {next}</button>}
+            {next && next !== 'Delivered' && <button type="button" className="btn pri" onClick={() => move(next)}>{next === 'Dispatched' ? 'Create shipment' : `Move to ${next}`}</button>}
+            {next === 'Delivered' && <span className="mut" style={{ fontSize: 12, alignSelf: 'center' }}>Delivered when every shipment is marked delivered</span>}
             {idx > 0 && <button type="button" className="btn gh" onClick={() => move(ORDER_STAGES[idx - 1])}>Back to {ORDER_STAGES[idx - 1]}</button>}
           </div>
           {blockers && (
@@ -233,7 +234,7 @@ export default function OrderDrawer({ id, onClose, onChanged }) {
                 <input className="inp" placeholder="Courier" value={ship.courier} onChange={(e) => setShip({ ...ship, courier: e.target.value })} autoFocus />
                 <input className="inp" placeholder="AWB" value={ship.awb} onChange={(e) => setShip({ ...ship, awb: e.target.value })} style={{ width: 130 }} />
                 <input className="inp" type="date" value={ship.dispatch_date} onChange={(e) => setShip({ ...ship, dispatch_date: e.target.value })} />
-                <button type="button" className="btn pri" disabled={!ship.courier.trim()} onClick={createShipment}>Create shipment</button>
+                <button type="button" className="btn pri" disabled={!ship.courier.trim()} onClick={createShipment}>Save shipment</button>
                 <button type="button" className="btn gh" onClick={() => setShip(null)}>Cancel</button>
               </div>
             ) : <button type="button" className="btn" style={{ alignSelf: 'flex-start' }} onClick={() => setShip({ courier: '', awb: '', dispatch_date: todayIso() })}><Icon name="truck" />Create shipment</button>)}

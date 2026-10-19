@@ -11,7 +11,10 @@ const BASE = process.env.MONGODB_TEST_URI || 'mongodb://127.0.0.1:27018/?directC
 
 export async function startApp() {
   const dbName = `stitch_test_${crypto.randomBytes(4).toString('hex')}`;
-  await connect(BASE.replace(/\/(\?|$)/, `/${dbName}$1`));
+  // always a fresh, randomly named database, whatever database the base URI names (it is dropped afterwards)
+  const uri = new URL(BASE);
+  uri.pathname = `/${dbName}`;
+  await connect(uri.toString());
   await ensureSchema();
   await bootstrap({ tenant: { name: 'Test Co', slug: 'test' }, email: 'admin@stitch.test', password: 'stitch123' });
   const server = createApp(loadConfig({ WEBHOOK_WORKER: 'off' })).listen(0);

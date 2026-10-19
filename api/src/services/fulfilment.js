@@ -91,7 +91,12 @@ export async function approveVersion(scope, customisationId) {
     const currentId = doc.kind === 'spec' ? item.current_spec_id : item.current_measurements_id;
     if (String(currentId) === String(doc._id) || doc.approved_by) throw conflict('This version is already approved');
     if (doc.status !== 'draft') throw conflict('Only a proposed change can be approved');
-    await Customisation.updateOne({ _id: doc._id }, { $set: { approved_by: scope.user._id } }, { session });
+    // the proposal was a snapshot of the spec when it was made; another change may have been approved since.
+    // Apply only the fields this proposal changed on top of what is current now, so no approved change is lost.
+    const current = await Customisation.findById(currentId).session(session).lean();
+    const values = { ...(current?.values ?? {}) };
+    for (const k of doc.changed_fields) { if (doc.values[k] === undefined) delete values[k]; else values[k] = doc.values[k]; }
+    await Customisation.updateOne({ _id: doc._id }, { $set: { approved_by: scope.user._id, values } }, { session });
     await makeCurrent(session, scope, order, item, doc, { type: 'customisation.approved', reason: doc.reason, data: { customisation_id: doc._id, kind: doc.kind, version: doc.version, changed_fields: doc.changed_fields } });
     return Customisation.findById(doc._id).session(session).lean();
   });
@@ -211,8 +216,10 @@ export async function updateDispatch(scope, dispatchId, body = {}) {
     if (!changes.length && body.delivery_proof_url === undefined) return d;
     await d.save({ session });
     const order = await Order.findById(d.order_id).session(session).lean();
-    const pending = await Dispatch.countDocuments({ order_id: order._id, status: { $ne: 'delivered' } }).session(session);
-    const deliver = !pending && order.stage === 'Dispatched';
+    // Delivered only when every shipment is delivered AND every item of the order went out in one (split shipments)
+    const all = await Dispatch.find({ order_id: order._id }).select('status order_item_ids').session(session).lean();
+    const shipped = new Set(all.flatMap((x) => x.order_item_ids.map(String)));
+    const deliver = order.stage === 'Dispatched' && all.every((x) => x.status === 'delivered') && order.items.every((i) => shipped.has(String(i._id)));
     await syncOrder(session, scope, order._id, {
       set: deliver ? { stage: 'Delivered', stage_changed_at: new Date() } : {},
       event: { type: corrected ? 'dispatch.corrected' : 'dispatch.updated',

@@ -100,6 +100,11 @@ export async function moveOrderStage(scope, orderId, body = {}) {
     const client = await Client.findById(order.client_id).session(session).lean();
     const from = ORDER_STAGES.indexOf(order.stage), target = ORDER_STAGES.indexOf(to);
     let overridden = null;
+    // Dispatched and Delivered follow the shipments: creating a shipment moves the order to Dispatched, and the order is
+    // Delivered when its shipments are. Moving there by hand would skip the courier, AWB and tracking.
+    if (target > from && ['Dispatched', 'Delivered'].includes(to)) {
+      throw badRequest(to === 'Dispatched' ? 'Create the shipment instead: that moves the order to Dispatched' : 'Mark the shipments delivered instead: the order follows them', { code: 'use_shipments' });
+    }
     if (target < from) {
       if (!reason) throw badRequest('Say why the order is moving back (reason)');
     } else {

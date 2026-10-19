@@ -68,7 +68,7 @@ export default function LeadDrawer({ id, onClose, onChanged }) {
   const leadGroups = byScope('lead');
   const clientDefs = byScope('client').flatMap((g) => g.fields);
   const itemGroups = byScope('item').map((g) => ({ ...g, fields: g.fields.filter((f) => !['product', 'quantity'].includes(f.key)) })).filter((g) => g.fields.length);
-  const clientValue = { client_name: d.client.name, whatsapp_consent: d.client.whatsapp_consent, email: d.client.email, city: d.client.city, customer_type: d.client.customer_type };
+  const clientValue = { client_name: d.client.name, phone: phone(d.client.phone), whatsapp_consent: d.client.whatsapp_consent, email: d.client.email, city: d.client.city, customer_type: d.client.customer_type };
   const clientKey = { client_name: 'name' };
 
   const move = async (to, extra = {}) => {
@@ -180,7 +180,10 @@ export default function LeadDrawer({ id, onClose, onChanged }) {
             <div className="lbl">Customer</div>
             <div className="fgrid" style={{ gridTemplateColumns: '190px 1fr' }}>
               {clientDefs.map((f) => (
-                <Row key={f.key} def={f}><FieldControl def={f} value={clientValue[f.key]} disabled={!open} onSave={(k, v) => patch({ client: { [clientKey[k] ?? k]: v } }, `${f.label} saved`)} /></Row>
+                <Row key={f.key} def={f}>
+                  {f.key === 'phone' ? <span className="m" style={{ fontSize: 12 }} title="The phone identifies the customer, so it is not edited per lead">{clientValue.phone}</span>
+                    : <FieldControl def={f} value={clientValue[f.key]} disabled={!open} onSave={(k, v) => patch({ client: { [clientKey[k] ?? k]: v } }, `${f.label} saved`)} />}
+                </Row>
               ))}
             </div>
           </section>

@@ -6,6 +6,7 @@ import { requirePhone } from '../lib/normalise.js';
 import { id, int, str } from '../lib/validate.js';
 import { AuditLog, Brand, Client, Conversation, Lead } from '../models/index.js';
 import { clientDto, clientInput, findOrCreateClient, visibleClientIds } from '../services/clients.js';
+import { recountLeads } from '../services/recount.js';
 import { actorFor } from '../services/scope.js';
 
 export const clientsRouter = Router();
@@ -69,6 +70,7 @@ clientsRouter.patch('/clients/:id', async (req, res) => {
     Object.assign(c, input);
     await c.save();
     await AuditLog.create({ tenant_id: req.scope.tenantId, actor: actorFor(req.scope, null), action: 'client.updated', target_type: 'client', target_id: c._id, changes });
+    await recountLeads(req.scope.tenantId, { client_id: c._id });
   }
   res.json(clientDto(c));
 });

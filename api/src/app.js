@@ -1,4 +1,5 @@
 import cors from 'cors';
+import mongoose from 'mongoose';
 import express from 'express';
 import { errorHandler, notFound } from './lib/errors.js';
 import { authRouter, requireAuth } from './routes/auth.js';
@@ -19,7 +20,10 @@ export function createApp(config) {
   app.use(express.json({ limit: '8mb' }));            // chat exports arrive as JSON text
 
   const api = express.Router();
-  api.get('/health', (_req, res) => res.json({ ok: true }));
+  api.get('/health', (_req, res) => {
+    const db = mongoose.connection.readyState === 1;           // 1 = connected
+    res.status(db ? 200 : 503).json({ ok: db, db: db ? 'up' : 'down' });
+  });
   api.use(authRouter);
   api.use(requireAuth);
   api.use(orgRouter);

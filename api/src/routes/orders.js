@@ -2,7 +2,7 @@
 import { Router } from 'express';
 import { ORDER_PATHS } from '../catalogue.js';
 import { ORDER_STAGES, PAYMENT_STATUSES } from '../lib/constants.js';
-import { id, int, isoDate, oneOf, str } from '../lib/validate.js';
+import { id, int, isoDate, localToDate, oneOf, str } from '../lib/validate.js';
 import { Brand, Client, Customisation, Order, OrderEvent, Payment, User } from '../models/index.js';
 import { clientDto } from '../services/clients.js';
 import { eventDto } from '../services/events.js';
@@ -96,7 +96,8 @@ ordersRouter.get('/payments', async (req, res) => {
   const q = req.query;
   const filter = { tenant_id: req.scope.tenantId, ...req.scope.brandFilter() };
   if (q.status) filter.status = oneOf(q.status, 'status', PAYMENT_STATUSES);
-  if (q.from || q.to) filter.received_at = { ...(q.from ? { $gte: new Date(isoDate(q.from, 'from')) } : {}), ...(q.to ? { $lt: new Date(Date.parse(isoDate(q.to, 'to')) + 86400000) } : {}) };
+  // whole business days (IST by default), not UTC days
+  if (q.from || q.to) filter.received_at = { ...(q.from ? { $gte: localToDate(`${isoDate(q.from, 'from')}T00:00:00`) } : {}), ...(q.to ? { $lt: new Date(localToDate(`${isoDate(q.to, 'to')}T00:00:00`).getTime() + 86400000) } : {}) };
   const limit = int(q.limit, 'limit', { min: 1, max: 500 }) ?? 100;
   res.json((await Payment.find(filter).sort({ created_at: -1 }).limit(limit).lean()).map(paymentDto));
 });

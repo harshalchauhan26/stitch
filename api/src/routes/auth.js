@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { HttpError } from '../lib/errors.js';
 import { signToken, verifyPassword, verifyToken } from '../lib/auth.js';
 import { str } from '../lib/validate.js';
-import { Brand, User } from '../models/index.js';
+import { Brand, Tenant, User } from '../models/index.js';
 import { loadScope } from '../services/scope.js';
 
 /** Bearer token -> req.scope (user, teams, brand scope). Every route after this needs a valid login. */
@@ -16,26 +16,34 @@ export async function requireAuth(req, _res, next) {
   next();
 }
 
-// Simple in-memory limiter for the login form: 8 tries per 15 minutes per IP + email
+// In-memory login limiter: 8 failed tries per 15 minutes per IP + email, and 40 per IP across all emails
+// (stops one IP trying many accounts). Old entries are pruned so the map cannot grow without bound.
 const attempts = new Map();
-const WINDOW = 15 * 60_000, MAX = 8;
-function limited(key) {
-  const now = Date.now();
+const WINDOW = 15 * 60_000, PER_ACCOUNT = 8, PER_IP = 40;
+function recent(key, now) {
   const hits = (attempts.get(key) || []).filter((t) => now - t < WINDOW);
-  attempts.set(key, hits);
-  return hits.length >= MAX;
+  if (hits.length) attempts.set(key, hits); else attempts.delete(key);
+  return hits;
 }
+function prune(now) {
+  if (attempts.size < 5000) return;
+  for (const k of attempts.keys()) recent(k, now);
+}
+const fail = (key, now) => attempts.set(key, [...(attempts.get(key) || []), now]);
 
 export const authRouter = Router();
 
 authRouter.post('/auth/login', async (req, res) => {
   const email = str(req.body?.email, 'Email', { required: true, max: 200 }).toLowerCase();
   const password = str(req.body?.password, 'Password', { required: true, max: 200 });
-  const key = `${req.ip}|${email}`;
-  if (limited(key)) throw new HttpError(429, 'Too many attempts. Try again in a few minutes.');
+  const now = Date.now();
+  const key = `${req.ip}|${email}`, ipKey = `ip|${req.ip}`;
+  prune(now);
+  if (recent(key, now).length >= PER_ACCOUNT || recent(ipKey, now).length >= PER_IP) throw new HttpError(429, 'Too many attempts. Try again in a few minutes.');
   const user = await User.findOne({ email, active: true });
-  if (!user || !verifyPassword(password, user.password_hash)) {
-    attempts.get(key).push(Date.now());
+  const ok = user && verifyPassword(password, user.password_hash) && await Tenant.exists({ _id: user.tenant_id, active: true });
+  if (!ok) {
+    fail(key, now); fail(ipKey, now);
     throw new HttpError(401, 'Wrong email or password');
   }
   attempts.delete(key);

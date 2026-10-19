@@ -15,7 +15,7 @@ export const toPaise = (rupees) => {
   const s = String(rupees ?? '').replace(/[₹,\s]/g, '');
   if (!s) return null;
   const n = Number(s);
-  return Number.isFinite(n) ? Math.round(n * 100) : NaN;
+  return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) : NaN;
 };
 export const toRupees = (paise) => (paise == null ? '' : String(paise / 100));
 

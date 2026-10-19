@@ -4,7 +4,7 @@
 import { withTransaction } from '../db.js';
 import { PAYMENT_KINDS, PAYMENT_MODES, PAYMENT_STATUSES } from '../lib/constants.js';
 import { badRequest, conflict, notFound } from '../lib/errors.js';
-import { bool, id, int, oneOf, str } from '../lib/validate.js';
+import { bool, id, int, oneOf, str, todayIso } from '../lib/validate.js';
 import { Client, Lead, Order, Payment } from '../models/index.js';
 import { commitWrite } from './events.js';
 import { computeGaps, gapCounts } from './gaps.js';
@@ -18,7 +18,7 @@ const dateOrNull = (v, label) => {
   if (Number.isNaN(d.getTime())) throw badRequest(`${label} must be a date and time`);
   return d;
 };
-const ymd = (d) => (d ? new Date(d).toISOString().slice(0, 10) : null);
+const ymd = (d) => (d ? todayIso(new Date(d)) : null);   // the calendar day in business time, not UTC
 
 /** Lead fields derived from the lead's advance payments */
 export function leadPaymentFields(payments) {
@@ -151,8 +151,10 @@ export async function updatePayment(scope, paymentId, body = {}) {
     if (payment.status === 'link_sent' && !payment.link.sent_at) payment.link.sent_at = new Date();
     if (payment.status === 'received' && !payment.received_at) payment.received_at = dateOrNull(body.received_at, 'received_at') ?? new Date();
     else if (body.received_at !== undefined) payment.received_at = dateOrNull(body.received_at, 'received_at');
-    const changes = ['status', 'mode', 'transaction_ref', 'amount', 'received_at'].filter((k) => String(before[k] ?? '') !== String(payment[k] ?? ''))
-      .map((k) => ({ field: `payment.${k}`, scope: 'payment', old: before[k] ?? null, new: payment[k] ?? null }));
+    const get = (o, k) => k.split('.').reduce((x, p) => x?.[p], o);
+    const tracked = ['status', 'mode', 'transaction_ref', 'amount', 'received_at', 'notes', 'link.url', 'link.sent_at', 'link.expires_at'];
+    const changes = tracked.filter((k) => String(get(before, k) ?? '') !== String(get(payment, k) ?? ''))
+      .map((k) => ({ field: `payment.${k}`, scope: 'payment', old: get(before, k) ?? null, new: get(payment, k) ?? null }));
     if (!changes.length) return payment;
     await payment.save({ session });
     const event = { type: payment.status === 'received' && before.status !== 'received' ? 'payment.received' : payment.status === 'refunded' ? 'payment.refunded' : 'payment.updated', changes, data: { payment_id: payment._id } };

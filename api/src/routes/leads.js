@@ -7,6 +7,7 @@ import { clientDto } from '../services/clients.js';
 import { eventDto } from '../services/events.js';
 import { computeGaps } from '../services/gaps.js';
 import { createLead, getLead, markLost, moveStage, reopenLead, undoEvent, updateLead } from '../services/leads.js';
+import { recountLeads } from '../services/recount.js';
 import { rulesCache } from '../services/rules.js';
 import { kickWebhooks } from '../services/webhooks.js';
 
@@ -91,6 +92,7 @@ leadsRouter.get('/leads/:id', async (req, res) => res.json(await view(req, req.p
 
 leadsRouter.patch('/leads/:id', async (req, res) => {
   const r = await updateLead(req.scope, req.params.id, req.body);
+  if (r.clientChanged) await recountLeads(req.scope.tenantId, { client_id: r.clientId });   // the client's other leads
   res.json({ ...(await view(req, req.params.id)), changed: r.changed });
 });
 
@@ -129,7 +131,7 @@ leadsRouter.post('/leads/:id/undo/:eventId', async (req, res) => {
 /** The to-do list: every open gap on every open lead the caller can see, blocking first, then nearest event (spec §5.1) */
 leadsRouter.get('/gaps', async (req, res) => {
   const q = req.query;
-  const filter = { tenant_id: req.scope.tenantId, stage_type: 'open', open_gap_count: { $gt: 0 }, ...req.scope.brandFilter() };
+  const filter = { tenant_id: req.scope.tenantId, stage_type: 'open', ...req.scope.brandFilter() };   // not the cached count: always the live answer
   if (q.brand) { const b = id(q.brand, 'brand'); if (!req.scope.canSeeBrand(b)) return res.json([]); filter.brand_id = b; }
   if (q.owner) filter.owner_id = q.owner === 'me' ? req.scope.user._id : id(q.owner, 'owner');
   const level = oneOf(q.level, 'level', ['needed', 'blocking']);

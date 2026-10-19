@@ -217,7 +217,7 @@ export async function updateLead(scope, leadId, body = {}) {
       source_message_id: id(body.source_message_id, 'source_message_id', { required: false }),
       reason: str(body.reason, 'reason', { max: 500 }),
     });
-    return { id: lead._id, changed: changes.length };
+    return { id: lead._id, changed: changes.length, clientChanged: changes.some((c) => c.scope === 'client'), clientId: lead.client_id };
   });
 }
 

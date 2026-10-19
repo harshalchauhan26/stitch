@@ -25,6 +25,7 @@ const OutboxSchema = new Schema({
   attempts: { type: Number, default: 0 },
   next_attempt_at: { type: Date, default: Date.now },
   locked_until: { type: Date, default: null },
+  redeliver_from: { type: Date, default: null },            // set by Redeliver: earlier successful sends do not count
   last_error: { type: String, default: null },
 }, baseOptions('outbox'));
 OutboxSchema.index({ status: 1, next_attempt_at: 1 });

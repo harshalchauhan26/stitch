@@ -2,6 +2,7 @@
 // Leads are entered by hand during the demo.
 //   npm run seed:demo             adds the demo org if there are no brands yet
 //   npm run seed:demo -- --reset  wipes the database first (refused in production unless ALLOW_RESET=yes)
+import '../src/env.js';
 import mongoose from 'mongoose';
 import { firstAdmin, loadConfig } from '../src/config.js';
 import { connect } from '../src/db.js';

@@ -132,7 +132,7 @@ integrationsRouter.get('/outbox', async (req, res) => {
 integrationsRouter.post('/outbox/:id/redeliver', async (req, res) => {
   requireRole(req.scope, 'admin');
   const o = await Outbox.findOneAndUpdate({ _id: id(req.params.id), tenant_id: req.scope.tenantId, status: { $in: ['failed', 'done'] } },
-    { $set: { status: 'pending', attempts: 0, next_attempt_at: new Date(), last_error: null } }, { returnDocument: 'after' }).lean();
+    { $set: { status: 'pending', attempts: 0, next_attempt_at: new Date(), last_error: null, redeliver_from: new Date() } }, { returnDocument: 'after' }).lean();
   if (!o) throw notFound('Failed or delivered event');
   const { kickWebhooks } = await import('../services/webhooks.js');
   kickWebhooks();

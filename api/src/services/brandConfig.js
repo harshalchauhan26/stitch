@@ -48,21 +48,31 @@ export async function updatePipeline(scope, brandId, input) {
       const kept = [...old.open.slice(0, i).reverse(), ...old.open.slice(i + 1)].find((o) => rename.has(o));
       return kept ? rename.get(kept) : wanted.find((s) => s.type === 'open').name;
     };
-    for (const r of await RequiredRule.find({ brand_id: brand._id, record_type: 'lead' }).session(session).lean()) {
-      const to = target(r.stage);
-      if (to === r.stage) continue;
-      const clash = await RequiredRule.findOne({ brand_id: brand._id, record_type: 'lead', stage: to, field: r.field }).session(session).lean();
-      if (clash) {
-        if (LEVEL_RANK[r.level] > LEVEL_RANK[clash.level]) await RequiredRule.updateOne({ _id: clash._id }, { $set: { level: r.level, locked: r.locked || clash.locked } }, { session });
-        await RequiredRule.deleteOne({ _id: r._id }, { session });
-      } else {
-        await RequiredRule.updateOne({ _id: r._id }, { $set: { stage: to } }, { session });
-      }
+    // rules: work out every rule's new stage from its OLD stage in one pass, then rewrite them together, so renames that
+    // chain or swap (A->B, B->A) cannot be applied twice; two rules landing on the same stage+field keep the stronger level
+    const oldRules = await RequiredRule.find({ brand_id: brand._id, record_type: 'lead' }).session(session).lean();
+    const moved = new Map();
+    for (const r of oldRules) {
+      const k = `${target(r.stage)}|${r.field}`;
+      const prev = moved.get(k);
+      if (!prev || LEVEL_RANK[r.level] > LEVEL_RANK[prev.level]) moved.set(k, { ...r, stage: target(r.stage), locked: r.locked || !!prev?.locked });
+      else if (r.locked) prev.locked = true;
     }
-    for (const [from, to] of rename) {
-      if (from === to) continue;
-      await Lead.updateMany({ brand_id: brand._id, stage: from }, { $set: { stage: to } }, { session });
-      await Lead.updateMany({ brand_id: brand._id, stage_before_lost: from }, { $set: { stage_before_lost: to } }, { session });
+    if (oldRules.some((r) => target(r.stage) !== r.stage)) {
+      await RequiredRule.deleteMany({ brand_id: brand._id, record_type: 'lead' }, { session });
+      await RequiredRule.insertMany([...moved.values()].map(({ _id, ...r }) => r), { session });
+    }
+    // leads: via temporary names first, for the same reason
+    const renames = [...rename].filter(([from, to]) => from !== to);
+    const stamp = Date.now();
+    const tmp = (i) => `__renaming_${stamp}_${i}`;
+    for (const [i, [from]] of renames.entries()) {
+      await Lead.updateMany({ brand_id: brand._id, stage: from }, { $set: { stage: tmp(i) } }, { session });
+      await Lead.updateMany({ brand_id: brand._id, stage_before_lost: from }, { $set: { stage_before_lost: tmp(i) } }, { session });
+    }
+    for (const [i, [, to]] of renames.entries()) {
+      await Lead.updateMany({ brand_id: brand._id, stage: tmp(i) }, { $set: { stage: to } }, { session });
+      await Lead.updateMany({ brand_id: brand._id, stage_before_lost: tmp(i) }, { $set: { stage_before_lost: to } }, { session });
     }
     const before = old.stages;
     brand.lead_pipeline = pipelineOf({ lead_pipeline: wanted }).stages;
