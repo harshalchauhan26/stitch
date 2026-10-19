@@ -1,7 +1,7 @@
 // What to capture and what is required when: field_defs, brand_templates, required_rules, counters (PLAN §5.13, §5.15)
 import mongoose from 'mongoose';
 import { FIELD_SCOPES, FIELD_TYPES, LEVELS } from '../lib/constants.js';
-import { ObjectId, Schema, baseOptions, tenantRef } from './common.js';
+import { ActorSchema, ChangeSchema, Mixed, ObjectId, Schema, baseOptions, tenantRef } from './common.js';
 
 // "This field only applies when <field> <op> <value>", e.g. duty_estimate only when country != India
 const ConditionSchema = new Schema({
@@ -69,6 +69,20 @@ const CounterSchema = new Schema({
   seq: { type: Number, default: 0 },
 }, { collection: 'counters', versionKey: false });
 
+// Settings changes that are not on a lead or order (required rules, ...). Spec §5.5: every rule change is logged.
+const AuditLogSchema = new Schema({
+  tenant_id: tenantRef,
+  actor: { type: ActorSchema, required: true },
+  action: { type: String, required: true },               // e.g. rule.changed, rule.removed, client.updated
+  target_type: { type: String, required: true },
+  target_id: { type: ObjectId, default: null },
+  changes: { type: [ChangeSchema], default: [] },
+  data: { type: Mixed, default: null },
+  at: { type: Date, default: Date.now },
+}, { collection: 'audit_log', versionKey: false, minimize: false });
+AuditLogSchema.index({ tenant_id: 1, target_type: 1, target_id: 1, at: -1 });
+
+export const AuditLog = mongoose.model('AuditLog', AuditLogSchema);
 export const FieldDef = mongoose.model('FieldDef', FieldDefSchema);
 export const BrandTemplate = mongoose.model('BrandTemplate', BrandTemplateSchema);
 export const RequiredRule = mongoose.model('RequiredRule', RequiredRuleSchema);

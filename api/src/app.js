@@ -2,7 +2,10 @@ import cors from 'cors';
 import express from 'express';
 import { errorHandler, notFound } from './lib/errors.js';
 import { authRouter, requireAuth } from './routes/auth.js';
+import { clientsRouter } from './routes/clients.js';
+import { leadsRouter } from './routes/leads.js';
 import { orgRouter } from './routes/org.js';
+import { settingsRouter } from './routes/settings.js';
 
 export function createApp(config) {
   const app = express();
@@ -16,6 +19,9 @@ export function createApp(config) {
   api.use(authRouter);
   api.use(requireAuth);
   api.use(orgRouter);
+  api.use(settingsRouter);
+  api.use(clientsRouter);
+  api.use(leadsRouter);
   api.use((_req, _res, next) => next(notFound('Endpoint')));
 
   app.use('/api', api);

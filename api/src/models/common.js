@@ -30,6 +30,7 @@ export const ActorSchema = new Schema({
 export const ChangeSchema = new Schema({
   field: { type: String, required: true },
   scope: String,
+  item_id: { type: ObjectId, default: null },
   old: Mixed,
   new: Mixed,
 }, { _id: false });
