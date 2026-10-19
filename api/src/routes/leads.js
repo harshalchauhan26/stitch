@@ -9,6 +9,7 @@ import { eventDto } from '../services/events.js';
 import { computeGaps } from '../services/gaps.js';
 import { createLead, getLead, markLost, moveStage, reopenLead, undoEvent, updateLead } from '../services/leads.js';
 import { rulesCache } from '../services/rules.js';
+import { kickWebhooks } from '../services/webhooks.js';
 
 export const leadsRouter = Router();
 
@@ -106,6 +107,7 @@ leadsRouter.delete('/leads/:id/items/:itemId', async (req, res) => {
 
 leadsRouter.post('/leads/:id/stage', async (req, res) => {
   const r = await moveStage(req.scope, req.params.id, req.body);
+  if (r.order_id) kickWebhooks();                         // tell the brand now rather than at the next worker tick
   res.json({ ...(await view(req, req.params.id)), order_id: r.order_id ?? null });
 });
 

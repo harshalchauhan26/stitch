@@ -54,14 +54,16 @@ export function computeGaps(rec, rb, uptoIndex) {
  * Which Blocking gaps stop this record moving to `to`? (spec §4.1)
  * A blocking field gates the stage after the one it is captured at, unless its def says otherwise
  * (Balance payment is captured at QC approval but only blocks Dispatched).
+ * Only gates this move crosses count: a gate the record already passed (met, or overridden by a pod lead)
+ * does not block every later move again. Its gap still shows on the record.
  */
 export function blockersForMove(rec, rb, to) {
   const stages = pipelineOf(rec.recordType);
-  const target = stages.indexOf(to);
+  const current = stages.indexOf(rec.stage), target = stages.indexOf(to);
   return computeGaps(rec, rb, target - 1).filter((g) => {
     if (g.level !== 'blocking') return false;
-    const gate = rb.defs.get(g.field)?.blocks_move_to ?? stages[stages.indexOf(g.stage) + 1];
-    return stages.indexOf(gate) <= target;
+    const gate = stages.indexOf(rb.defs.get(g.field)?.blocks_move_to ?? stages[stages.indexOf(g.stage) + 1]);
+    return gate > current && gate <= target;
   });
 }
 

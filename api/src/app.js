@@ -3,7 +3,9 @@ import express from 'express';
 import { errorHandler, notFound } from './lib/errors.js';
 import { authRouter, requireAuth } from './routes/auth.js';
 import { clientsRouter } from './routes/clients.js';
+import { integrationsRouter } from './routes/integrations.js';
 import { leadsRouter } from './routes/leads.js';
+import { ordersRouter } from './routes/orders.js';
 import { orgRouter } from './routes/org.js';
 import { settingsRouter } from './routes/settings.js';
 
@@ -22,6 +24,8 @@ export function createApp(config) {
   api.use(settingsRouter);
   api.use(clientsRouter);
   api.use(leadsRouter);
+  api.use(ordersRouter);
+  api.use(integrationsRouter);
   api.use((_req, _res, next) => next(notFound('Endpoint')));
 
   app.use('/api', api);

@@ -574,7 +574,7 @@ Saving with gaps is **always allowed** (spec §3, "Quick add").
 { "version": 7, "to": "Quoted", "reason": null }
 ```
 
-- **Forward moves:** allowed only when there are **no Blocking gaps** in the current stage and in any stage being skipped. Needed gaps never block (spec §4.1).
+- **Forward moves:** allowed only when there are **no Blocking gaps** in the current stage and in any stage being skipped. Needed gaps never block (spec §4.1). A gate only blocks the move that crosses it: once a record is past a gate (met, or overridden by a pod lead), later moves don't re-check it, though its gap stays visible.
 - **Refused moves:** return **422** with the list of Blocking gaps, and log a `stage.move_blocked` event so pod leads can see where people get stuck.
 - **Backward moves:** always allowed, but a `reason` is required.
 - **Overrides (spec Q2):** a pod lead may pass `override: true` with a reason. This writes a `stage.overridden` event.
@@ -717,7 +717,7 @@ It also means a slow or failing brand endpoint can never block or roll back a Wo
 
 - **Picking up work:** a loop, every 5 seconds or on a change stream, claims due outbox rows with `findOneAndUpdate({ status: 'pending', next_attempt_at ≤ now }, { status: 'processing' })`.
 - **Sending:** it POSTs to every active endpoint of the brand that subscribes to the event. The timeout is **10 seconds**, and only **2xx** counts as success.
-- **Retries:** after 1 minute, 5 minutes, 30 minutes, 2 hours, 6 hours, then 24 hours. After the 6th failure the row is marked `failed`, and admins get a notification and a **Redeliver** button.
+- **Retries:** after 1 minute, 5 minutes, 30 minutes, 2 hours, then 6 hours. The 6th failed attempt marks the row `failed`, and admins get a notification and a **Redeliver** button.
 - **Receivers must de-duplicate** by `X-Stitch-Event-Id`, because delivery is *at least once*.
 
 ### 11.4 Request format

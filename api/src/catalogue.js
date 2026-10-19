@@ -171,3 +171,8 @@ export const TEMPLATES = [
     ],
   },
 ].map((t) => ({ ...t, field_keys: [...new Set(t.rules.map((x) => x.field))] }));
+
+// At Won each item's values are split into two customisation records (PLAN §5.17): measurements, and the design spec.
+export const MEASUREMENT_KEYS = ['bust', 'waist', 'hip', 'shoulder', 'armhole', 'sleeve_length', 'blouse_length', 'chest', 'neck', 'garment_length', 'trouser_length', 'thigh', 'height'];
+// Lead fields that stay on the lead for reporting and are not copied to the order (spec §2.3)
+export const LEAD_ONLY_FIELDS = ['lead_source', 'priority', 'next_followup_date', 'budget_min', 'budget_max', 'quote_validity', 'quote_status', 'link_expiry', 'karigar_slot_until', 'advance_amount', 'payment_link_sent'];
