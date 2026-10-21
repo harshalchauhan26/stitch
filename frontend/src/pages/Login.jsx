@@ -8,6 +8,7 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [show, setShow] = useState(false);              // show / hide the password while typing
 
   const submit = async (e) => {
     e.preventDefault(); setBusy(true); setError(null);
@@ -20,7 +21,12 @@ export default function Login() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}><Logo /><span style={{ fontWeight: 600, fontSize: 15 }}>Stitch</span></div>
         <h1 className="ttl">Sign in</h1>
         <input className="inp" type="email" placeholder="Email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} autoFocus />
-        <input className="inp" type="password" placeholder="Password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+        <div style={{ position: 'relative', display: 'flex' }}>
+          <input className="inp" type={show ? 'text' : 'password'} placeholder="Password" autoComplete="current-password" value={password}
+            onChange={(e) => setPassword(e.target.value)} style={{ flexGrow: 1, paddingRight: 64 }} />
+          <button type="button" className="btn gh sm" onClick={() => setShow((s) => !s)} aria-label={show ? 'Hide password' : 'Show password'} aria-pressed={show}
+            style={{ position: 'absolute', right: 2, top: 2, height: 28 }}>{show ? 'Hide' : 'Show'}</button>
+        </div>
         {error && <span className="err-t">{error}</span>}
         <button className="btn pri" type="submit" disabled={busy || !email || !password} style={{ justifyContent: 'center' }}>{busy ? 'Signing in…' : 'Sign in'}</button>
         {import.meta.env.DEV && <span className="mut" style={{ fontSize: 11 }}>Demo logins: admin@stitch.test, priya@stitch.test (sales), meera@stitch.test (pod lead). Password stitch123.</span>}
