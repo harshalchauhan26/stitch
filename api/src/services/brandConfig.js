@@ -1,4 +1,5 @@
 // Per-brand setup done by the agency at onboarding: the lead pipeline and the brand's own custom fields.
+import { CORE_FIELDS, GATE_FIELDS } from '../catalogue.js';
 import { withTransaction } from '../db.js';
 import { ORDER_STAGES } from '../lib/constants.js';
 import { badRequest, conflict, notFound } from '../lib/errors.js';
@@ -99,12 +100,14 @@ export async function brandFields(scope, brandId) {
   const dto = (d) => ({
     key: d.key, label: d.label, scope: d.scope, type: d.type, options: d.options ?? null, unit: d.unit, hint: d.hint, computed: d.computed,
     custom: !!d.brand_id, active: d.active, stage: ruleOf.get(d.key)?.stage ?? null, level: ruleOf.get(d.key)?.level ?? null, locked: !!ruleOf.get(d.key)?.locked,
+    core: CORE_FIELDS.includes(d.key), gate: GATE_FIELDS.includes(d.key),
   });
-  const used = defs.filter((d) => ruleOf.has(d.key) || d.brand_id).map(dto).sort((a, b) => p.open.indexOf(a.stage) - p.open.indexOf(b.stage) || a.label.localeCompare(b.label));
+  const used = defs.filter((d) => ruleOf.has(d.key) && d.active).map(dto).sort((a, b) => p.open.indexOf(a.stage) - p.open.indexOf(b.stage) || a.label.localeCompare(b.label));
   return {
     pipeline: p.stages,
     fields: used,
-    available: defs.filter((d) => !d.brand_id && !ruleOf.has(d.key) && d.active).map(dto).sort((a, b) => a.label.localeCompare(b.label)),
+    // fields this brand does not ask for (standard ones it never used, and any it removed, its own included): can be added back
+    available: defs.filter((d) => !ruleOf.has(d.key) && d.active).map(dto).sort((a, b) => a.label.localeCompare(b.label)),
   };
 }
 
@@ -171,6 +174,7 @@ export async function updateBrandField(scope, brandId, key, body = {}) {
       const rule = await RequiredRule.findOne({ brand_id: brand._id, record_type: 'lead', field: key }).session(session);
       if (rule?.locked && body.level !== undefined && body.level !== 'blocking' && scope.user.role !== 'admin') throw badRequest('Only an admin can lower a gate field');
       const level = body.level === null ? null : oneOf(body.level, 'Level', custom ? CUSTOM_LEVELS : ['optional', 'needed', 'blocking']) ?? rule?.level ?? 'optional';
+      if (CORE_FIELDS.includes(key) && (level === null || level === 'optional')) throw badRequest(`${def.label} is needed on every lead: it cannot be made optional or removed`);
       const stage = body.stage !== undefined ? oneOf(body.stage, 'Stage', p.open, { required: true }) : rule?.stage ?? p.open[0];
       if (level === null) { if (rule) await rule.deleteOne({ session }); }          // hide the field for this brand
       else if (rule) { rule.stage = stage; rule.level = level; rule.updated_by = scope.user._id; await rule.save({ session }); }

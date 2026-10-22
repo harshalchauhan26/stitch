@@ -116,3 +116,31 @@ describe('editing a pipeline', () => {
     assert.equal(r.status, 400);
   });
 });
+
+describe('switching fields between optional and needed', () => {
+  test('any field can switch, core fields stay needed, removed fields can be added back', async () => {
+    // switch both ways
+    let r = ok(await t.api('PATCH', `/brands/${o.na.id}/fields/dupatta_border`, { level: 'optional' }, o.admin));
+    assert.equal(r.fields.find((f) => f.key === 'dupatta_border').level, 'optional');
+    r = ok(await t.api('PATCH', `/brands/${o.na.id}/fields/dupatta_border`, { level: 'needed' }, o.admin));
+    assert.equal(r.fields.find((f) => f.key === 'dupatta_border').level, 'needed');
+    // core fields: always needed, cannot be removed
+    for (const key of ['client_name', 'phone', 'product']) {
+      for (const level of ['optional', null]) {
+        const bad = await t.api('PATCH', `/brands/${o.na.id}/fields/${key}`, { level }, o.admin);
+        assert.equal(bad.status, 400, `${key} -> ${level}`);
+        assert.match(bad.body.error, /needed on every lead/);
+      }
+    }
+    assert.ok(r.fields.find((f) => f.key === 'phone').core);
+    // a brand's own field, removed, shows up again under "add back"
+    ok(await t.api('POST', `/brands/${o.na.id}/fields`, { label: 'Padding', type: 'bool', scope: 'item', stage: 'Customising' }, o.admin), 201);
+    r = ok(await t.api('PATCH', `/brands/${o.na.id}/fields/padding`, { level: null }, o.admin));
+    assert.ok(!r.fields.some((f) => f.key === 'padding'));
+    assert.ok(r.available.some((f) => f.key === 'padding' && f.custom));
+    r = ok(await t.api('PATCH', `/brands/${o.na.id}/fields/padding`, { stage: 'Customising', level: 'needed' }, o.admin));
+    assert.equal(r.fields.find((f) => f.key === 'padding').level, 'needed');
+    // a brand's own field still cannot be a gate
+    assert.equal((await t.api('PATCH', `/brands/${o.na.id}/fields/padding`, { level: 'blocking' }, o.admin)).status, 400);
+  });
+});

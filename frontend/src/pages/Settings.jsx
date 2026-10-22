@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { NavLink, Navigate, useParams } from 'react-router-dom';
+import { NavLink, Navigate, useParams, useSearchParams } from 'react-router-dom';
 import Icon from '../lib/Icon.jsx';
-import { LevelChip } from '../components/FieldControl.jsx';
 import { api } from '../api/index.js';
 import { useApp } from '../context/AppContext.jsx';
 import { phone, ROLE_LABEL } from '../lib/format.js';
@@ -38,6 +37,24 @@ function PipelineEditor({ stages, onChange }) {
   );
 }
 
+// How much a field matters for this brand. Core fields are always needed; gates are changed by an admin only.
+function LevelControl({ f, admin, onChange }) {
+  if (f.core) return <span className="chip amb" title="Every lead needs this">Always needed</span>;
+  if (f.gate || f.level === 'blocking') {
+    if (!admin) return <span className="chip red" title="Stops the next move until filled. Only an admin can change it">Gate</span>;
+    return (
+      <select className="inp" value={f.level} onChange={(e) => onChange(e.target.value)} style={{ height: 28, fontSize: 12 }} aria-label={`${f.label} level`}>
+        <option value="blocking">Gate (blocks the next move)</option><option value="needed">Needed</option><option value="optional">Optional</option>
+      </select>
+    );
+  }
+  return (
+    <div className="seg" role="group" aria-label={`${f.label} level`}>
+      {[['optional', 'Optional'], ['needed', 'Needed']].map(([k, l]) => <button key={k} type="button" className={f.level === k ? 'on' : ''} onClick={() => f.level !== k && onChange(k)}>{l}</button>)}
+    </div>
+  );
+}
+
 // ------------------------------------------------------------------ one brand's setup: pipeline + fields
 function BrandSetup({ brand, onSaved }) {
   const { say, user, reloadMe } = useApp();
@@ -69,32 +86,32 @@ function BrandSetup({ brand, onSaved }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
       <section className="tbl" style={box}>
-        <div className="lbl">{brand.name} · lead pipeline</div>
-        <span className="mut" style={{ fontSize: 12 }}>The stages this brand's leads move through. Renaming a stage keeps its leads; a stage with leads in it cannot be removed. Orders use the same pipeline for every brand.</span>
+        <div className="lbl">{brand.name} · stages</div>
+        <span className="mut" style={{ fontSize: 12 }}>The steps this brand's leads go through, in order. Rename, add, move up or down, or remove a stage, then <b>Save stages</b>. Renaming keeps the leads in it; a stage that still has leads cannot be removed. The won stage creates the order. Orders use the same stages for every brand.</span>
         <PipelineEditor stages={stages} onChange={setStages} />
-        {dirty && <div style={{ display: 'flex', gap: 8 }}><button type="button" className="btn pri" onClick={savePipeline}>Save pipeline</button><button type="button" className="btn gh" onClick={load}>Undo changes</button></div>}
+        {dirty && <div style={{ display: 'flex', gap: 8 }}><button type="button" className="btn pri" onClick={savePipeline}>Save stages</button><button type="button" className="btn gh" onClick={load}>Undo changes</button></div>}
       </section>
 
       <section className="tbl" style={box}>
         <div className="lbl">{brand.name} · fields by stage</div>
-        <span className="mut" style={{ fontSize: 12 }}><b>Needed</b> fields show up as gaps. <b>Blocking</b> fields also stop the lead moving on. A brand's own fields are never blocking.</span>
+        <span className="mut" style={{ fontSize: 12 }}>What this brand asks at each stage. Switch a field between <b>Optional</b> and <b>Needed</b> (needed fields show up as gaps), move it to another stage, or remove it. Customer name, phone and product are always needed. <b>Gates</b> stop the next move until filled and can only be changed by an admin.</span>
         {data.pipeline.filter((s) => s.type === 'open').map((s) => {
           const here = data.fields.filter((f) => f.stage === s.name && f.level);
           return (
             <div key={s.name} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               <div style={{ fontWeight: 600, fontSize: 12, marginTop: 6 }}>{s.name}</div>
               {here.map((f) => (
-                <div key={f.key} style={{ display: 'grid', gridTemplateColumns: '1fr 110px 150px 170px 30px', gap: 8, alignItems: 'center', fontSize: 12, padding: '4px 0', borderTop: '1px solid var(--ln2)' }}>
+                <div key={f.key} style={{ display: 'grid', gridTemplateColumns: '1fr 120px 150px 190px 70px', gap: 8, alignItems: 'center', fontSize: 12, padding: '4px 0', borderTop: '1px solid var(--ln2)' }}>
                   <span style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-                    {f.label}{f.custom && <span className="chip blu" style={{ fontSize: 10, height: 18 }}>brand</span>}{f.locked && <span className="chip red" style={{ fontSize: 10, height: 18 }} title="Only an admin can lower this">gate</span>}
-                    {f.computed && <span className="chip" style={{ fontSize: 10, height: 18 }}>filled by Stitch</span>}
+                    {f.label}{f.custom && <span className="chip blu" style={{ fontSize: 10, height: 18 }}>brand</span>}
+                    {f.computed && <span className="chip" style={{ fontSize: 10, height: 18 }} title="Filled in from payments, not typed">filled by Stitch</span>}
                   </span>
                   <span className="mut">{f.scope === 'item' ? 'each product' : f.scope === 'client' ? 'customer' : 'lead'} · {TYPES.find((t) => t[0] === f.type)?.[1] ?? f.type}</span>
-                  <select className="inp" value={f.stage} onChange={(e) => update(f.key, { stage: e.target.value }, `${f.label} moved to ${e.target.value}`)} style={{ height: 28, fontSize: 12 }}>{open.map((x) => <option key={x}>{x}</option>)}</select>
-                  <select className="inp" value={f.level} disabled={f.locked && !admin} onChange={(e) => update(f.key, { level: e.target.value }, `${f.label} is now ${e.target.value}`)} style={{ height: 28, fontSize: 12 }}>
-                    {(f.custom ? ['optional', 'needed'] : ['optional', 'needed', 'blocking']).map((l) => <option key={l} value={l}>{l[0].toUpperCase() + l.slice(1)}</option>)}
-                  </select>
-                  {!f.locked ? <button type="button" className="tw" title="Hide this field for this brand" onClick={() => update(f.key, { level: null }, `${f.label} hidden for ${brand.name}`)}><Icon name="x" small /></button> : <span />}
+                  <select className="inp" value={f.stage} aria-label={`${f.label} stage`} onChange={(e) => update(f.key, { stage: e.target.value }, `${f.label} moved to ${e.target.value}`)} style={{ height: 28, fontSize: 12 }}>{open.map((x) => <option key={x}>{x}</option>)}</select>
+                  <LevelControl f={f} admin={admin} onChange={(level) => update(f.key, { level }, `${f.label} is now ${level === 'blocking' ? 'a gate' : level}`)} />
+                  {!f.core && (!(f.gate || f.level === 'blocking') || admin)
+                    ? <button type="button" className="btn gh sm" title={`Stop asking for ${f.label} on ${brand.name} leads`} onClick={() => window.confirm(`Remove "${f.label}" from ${brand.name}? Values already entered are kept, and you can add it back below.`) && update(f.key, { level: null }, `${f.label} removed from ${brand.name}`)}>Remove</button>
+                    : <span />}
                 </div>
               ))}
               {here.length === 0 && <span className="mut" style={{ fontSize: 12 }}>Nothing asked at this stage.</span>}
@@ -117,10 +134,13 @@ function BrandSetup({ brand, onSaved }) {
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
             <button type="button" className="btn pri" onClick={() => setNf({ label: '', type: 'text', options: '', scope: 'lead', stage: open[0], level: 'optional' })}><Icon name="plus" />New field for {brand.name}</button>
             {data.available.length > 0 && <>
-              <span className="mut" style={{ fontSize: 12 }}>or use a standard field:</span>
-              <select className="inp" value={add.key} onChange={(e) => setAdd({ ...add, key: e.target.value })} style={{ height: 28, fontSize: 12 }}><option value="">Choose…</option>{data.available.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}</select>
-              <select className="inp" value={add.stage || open[0]} onChange={(e) => setAdd({ ...add, stage: e.target.value })} style={{ height: 28, fontSize: 12 }}>{open.map((x) => <option key={x}>{x}</option>)}</select>
-              <button type="button" className="btn sm" disabled={!add.key} onClick={() => { update(add.key, { stage: add.stage || open[0], level: 'optional' }, 'Field added'); setAdd({ key: '', stage: '', level: 'optional' }); }}>Add</button>
+              <span className="mut" style={{ fontSize: 12 }}>or add back a field:</span>
+              <select className="inp" value={add.key} onChange={(e) => setAdd({ ...add, key: e.target.value })} style={{ height: 28, fontSize: 12 }} aria-label="Field to add back">
+                <option value="">Choose…</option>{data.available.map((f) => <option key={f.key} value={f.key}>{f.label}{f.custom ? ' (brand)' : ''}</option>)}
+              </select>
+              <select className="inp" value={add.stage || open[0]} onChange={(e) => setAdd({ ...add, stage: e.target.value })} style={{ height: 28, fontSize: 12 }} aria-label="At stage">{open.map((x) => <option key={x}>{x}</option>)}</select>
+              <select className="inp" value={add.level} onChange={(e) => setAdd({ ...add, level: e.target.value })} style={{ height: 28, fontSize: 12 }} aria-label="Level"><option value="optional">Optional</option><option value="needed">Needed</option></select>
+              <button type="button" className="btn sm" disabled={!add.key} onClick={() => { update(add.key, { stage: add.stage || open[0], level: add.level }, 'Field added'); setAdd({ key: '', stage: '', level: 'optional' }); }}>Add</button>
             </>}
           </div>
         )}
@@ -132,10 +152,11 @@ function BrandSetup({ brand, onSaved }) {
 // ------------------------------------------------------------------ brands: onboarding + list
 function BrandsTab() {
   const { say, reloadMe, user } = useApp();
+  const [params] = useSearchParams();
   const [brands, setBrands] = useState(null);
   const [teams, setTeams] = useState([]);
   const [templates, setTemplates] = useState([]);
-  const [sel, setSel] = useState(null);
+  const [sel, setSel] = useState(params.get('brand'));        // /settings/brands?brand=<id> opens that brand
   const [form, setForm] = useState(null);
   const [check, setCheck] = useState(null);
   const timer = useRef();

@@ -10,7 +10,7 @@ import { dayLabel, phone, plural } from '../lib/format.js';
 export default function Leads() {
   const { id } = useParams();
   const nav = useNavigate();
-  const { brand, setBrand, brands, brandById, refreshSummary, say } = useApp();
+  const { brand, setBrand, brands, brandById, refreshSummary, say, user } = useApp();
   const [rows, setRows] = useState(null);
   const [showClosed, setShowClosed] = useState(false);
   const [q, setQ] = useState('');
@@ -73,6 +73,7 @@ export default function Leads() {
               {!rows ? 'Loading…' : current ? `${plural(visible.length, 'lead')} in ${current.name}'s pipeline. Drag a card to move it.` : `${plural(visible.length, 'lead')} across all brands. Pick a brand to see its pipeline.`}
             </span>
           </div>
+          {current && ['admin', 'pod_lead'].includes(user?.role) && <Link className="btn" to={`/settings/brands?brand=${current.id}`}>Edit stages and fields</Link>}
           <Link className="btn pri" to="/leads/new"><Icon name="plus" />Add lead</Link>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
