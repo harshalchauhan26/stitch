@@ -25,13 +25,6 @@ describe('custom pipeline per brand', () => {
     assert.equal(at('client_name').stage, 'New enquiry');
     assert.equal(at('advance_amount').stage, 'Trial');
     assert.equal(at('advance_amount').level, 'blocking');
-    const fields = ok(await t.api('GET', `/brands/${kh.id}/fields`, undefined, o.admin));
-    assert.ok(fields.order.fields.some((f) => f.key === 'customer_sign_off' && f.stage === 'Measurements' && f.level === 'blocking'));
-    assert.deepEqual(fields.order_stages.slice(0, 3), ['Created', 'Spec locked', 'Measurements']);
-    const changed = ok(await t.api('PUT', `/brands/${kh.id}/rules`, {
-      rules: [{ record_type: 'order', stage: 'Production', field: 'customer_sign_off', level: 'blocking' }],
-    }, o.admin));
-    assert.equal(changed[0].stage, 'Production');
   });
 
   test('a lead walks the brand\'s stages, and its won stage creates the order', async () => {

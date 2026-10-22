@@ -87,31 +87,25 @@ const slug = (label) => {
   return /^[a-z]/.test(s) ? s : `f_${s}`;
 };
 
-/** Every field this brand uses, with its stage and level, plus catalogue fields it does not use yet (for Settings). */
+/** Every lead field this brand uses, with its stage and level, plus catalogue fields it does not use yet (for Settings) */
 export async function brandFields(scope, brandId) {
   const brand = await brandOr404(scope, brandId);
   const [defs, rules] = await Promise.all([
-    FieldDef.find({ tenant_id: scope.tenantId, brand_id: { $in: [null, brand._id] }, record_types: { $in: ['lead', 'order'] } }).lean(),
-    RequiredRule.find({ brand_id: brand._id, record_type: { $in: ['lead', 'order'] } }).lean(),
+    FieldDef.find({ tenant_id: scope.tenantId, brand_id: { $in: [null, brand._id] }, record_types: 'lead' }).lean(),
+    RequiredRule.find({ brand_id: brand._id, record_type: 'lead' }).lean(),
   ]);
   const p = pipelineOf(brand);
-  const rulesByType = { lead: new Map(), order: new Map() };
-  for (const rule of rules) rulesByType[rule.record_type].set(rule.field, rule);
+  const ruleOf = new Map(rules.map((r) => [r.field, r]));
   const dto = (d) => ({
     key: d.key, label: d.label, scope: d.scope, type: d.type, options: d.options ?? null, unit: d.unit, hint: d.hint, computed: d.computed,
-    custom: !!d.brand_id, active: d.active,
+    custom: !!d.brand_id, active: d.active, stage: ruleOf.get(d.key)?.stage ?? null, level: ruleOf.get(d.key)?.level ?? null, locked: !!ruleOf.get(d.key)?.locked,
   });
-  const fieldsFor = (recordType, stages) => {
-    const ruleOf = rulesByType[recordType];
-    const candidates = defs.filter((d) => d.record_types.includes(recordType));
-    const withRule = (d) => ({ ...dto(d), stage: ruleOf.get(d.key)?.stage ?? null, level: ruleOf.get(d.key)?.level ?? null, locked: !!ruleOf.get(d.key)?.locked });
-    const sort = (a, b) => stages.indexOf(a.stage) - stages.indexOf(b.stage) || a.label.localeCompare(b.label);
-    return {
-      fields: candidates.filter((d) => ruleOf.has(d.key) || d.brand_id).map(withRule).sort(sort),
-      available: candidates.filter((d) => !d.brand_id && !ruleOf.has(d.key) && d.active).map(withRule).sort((a, b) => a.label.localeCompare(b.label)),
-    };
+  const used = defs.filter((d) => ruleOf.has(d.key) || d.brand_id).map(dto).sort((a, b) => p.open.indexOf(a.stage) - p.open.indexOf(b.stage) || a.label.localeCompare(b.label));
+  return {
+    pipeline: p.stages,
+    fields: used,
+    available: defs.filter((d) => !d.brand_id && !ruleOf.has(d.key) && d.active).map(dto).sort((a, b) => a.label.localeCompare(b.label)),
   };
-  return { pipeline: p.stages, order_stages: ORDER_STAGES, ...fieldsFor('lead', p.open), order: fieldsFor('order', ORDER_STAGES) };
 }
 
 function fieldShape(body, existing) {

@@ -32,7 +32,6 @@ export default {
   brandFields: (id) => req('GET', `/brands/${id}/fields`),
   addBrandField: (id, body) => req('POST', `/brands/${id}/fields`, body),
   updateBrandField: (id, key, body) => req('PATCH', `/brands/${id}/fields/${key}`, body),
-  updateBrandRule: (id, rule) => req('PUT', `/brands/${id}/rules`, { rules: [rule] }),
   savePipeline: (id, stages) => req('PUT', `/brands/${id}/pipeline`, { stages }),
   teams: () => req('GET', '/teams'),
   createTeam: (body) => req('POST', '/teams', body),
