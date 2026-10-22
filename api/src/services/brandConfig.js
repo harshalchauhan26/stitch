@@ -9,7 +9,7 @@ import { actorFor } from './scope.js';
 
 const LEVEL_RANK = { optional: 0, needed: 1, blocking: 2 };
 export const CUSTOM_TYPES = ['text', 'longtext', 'number', 'currency', 'date', 'select', 'bool', 'url'];
-export const CUSTOM_LEVELS = ['optional', 'needed', 'blocking'];
+export const CUSTOM_LEVELS = ['optional', 'needed'];        // custom fields never block a stage (CEO, 20 Oct)
 
 async function brandOr404(scope, brandId, session) {
   const b = await Brand.findOne({ _id: brandId, tenant_id: scope.tenantId }).session(session ?? null);
@@ -131,7 +131,7 @@ function fieldShape(body, existing) {
   return out;
 }
 
-/** body: { label, type, scope: lead|item, options?, unit?, min?, max?, hint?, stage?, level?: optional|needed|blocking } */
+/** body: { label, type, scope: lead|item, options?, unit?, min?, max?, hint?, stage?, level?: optional|needed } */
 export async function createCustomField(scope, brandId, body = {}) {
   const shape = fieldShape(body);
   const level = oneOf(body.level, 'Level', CUSTOM_LEVELS) ?? 'optional';

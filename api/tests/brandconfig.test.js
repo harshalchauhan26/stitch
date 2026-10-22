@@ -56,11 +56,12 @@ describe('custom pipeline per brand', () => {
 });
 
 describe('custom fields per brand', () => {
-  test('a brand gets its own field; other brands cannot use it; it can be made a gate', async () => {
+  test('a brand gets its own field; other brands cannot use it; it cannot block', async () => {
     assert.equal((await t.api('POST', `/brands/${kh.id}/fields`, { label: 'Resizing', type: 'bool' }, o.tokens.priya)).status, 403, 'sales cannot change setup');
-    const r = ok(await t.api('POST', `/brands/${kh.id}/fields`, { label: 'Resizing allowed', type: 'select', options: ['No', 'Once', 'Twice'], scope: 'item', stage: 'Consultation', level: 'blocking' }, o.admin), 201);
+    assert.equal((await t.api('POST', `/brands/${kh.id}/fields`, { label: 'Resizing', type: 'bool', level: 'blocking' }, o.admin)).status, 400);
+    const r = ok(await t.api('POST', `/brands/${kh.id}/fields`, { label: 'Resizing allowed', type: 'select', options: ['No', 'Once', 'Twice'], scope: 'item', stage: 'Consultation', level: 'needed' }, o.admin), 201);
     const f = r.fields.find((x) => x.label === 'Resizing allowed');
-    assert.deepEqual([f.key, f.custom, f.stage, f.level, f.scope], ['resizing_allowed', true, 'Consultation', 'blocking', 'item']);
+    assert.deepEqual([f.key, f.custom, f.stage, f.level, f.scope], ['resizing_allowed', true, 'Consultation', 'needed', 'item']);
     assert.equal((await t.api('POST', `/brands/${kh.id}/fields`, { label: 'resizing allowed', type: 'text' }, o.admin)).status, 409);
     ok(await t.api('POST', `/brands/${kh.id}/fields`, { label: 'Alteration rounds included', type: 'number', min: 0, max: 5 }, o.admin), 201);
 
@@ -70,11 +71,10 @@ describe('custom fields per brand', () => {
     const na = await t.api('POST', '/leads', { brand_id: o.na.id, client: { phone: '+91 96000 00004' }, fields: { alteration_rounds_included: 1 } }, o.tokens.priya);
     assert.equal(na.status, 400, 'Noor Atelier does not have this field');
 
-    // a custom gate shows as a blocking gap at its stage and prevents crossing it
+    // a needed custom field shows as a gap at its stage, like any other field
     lead = ok(await t.api('POST', '/leads', { brand_id: kh.id, client: { phone: '+91 96000 00005' }, items: [{ product: 'Saree' }] }, o.tokens.priya), 201);
     lead = ok(await t.api('POST', `/leads/${lead.id}/stage`, { version: lead.version, to: 'Consultation' }, o.tokens.priya));
-    assert.ok(lead.gaps.some((g) => g.field === 'resizing_allowed' && g.level === 'blocking' && g.item_label === 'Item 1 · Saree'));
-    assert.equal((await t.api('POST', `/leads/${lead.id}/stage`, { version: lead.version, to: 'Trial' }, o.tokens.priya)).status, 422);
+    assert.ok(lead.gaps.some((g) => g.field === 'resizing_allowed' && g.item_label === 'Item 1 · Saree'));
   });
 
   test('a field can be renamed, moved to another stage, or hidden', async () => {

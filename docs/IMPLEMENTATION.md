@@ -240,8 +240,8 @@ Other cases:
 - on the customer (name, consent…).
 
 **Custom fields** (Settings → Brands → "New field for <brand>"):
-- **Settings:** a label, a type, once per lead or per product, a stage, and optional, needed, or blocking.
-- **Blocking** can be selected when an empty brand-owned field must gate the next stage. The current level is always shown in Settings and can be changed without removing the field.
+- **Settings:** a label, a type, once per lead or per product, a stage, and optional or needed.
+- **Never blocking**, as the CEO asked.
 - **Only that brand sees them.** They carry over to the order at won.
 
 **Gaps:**
