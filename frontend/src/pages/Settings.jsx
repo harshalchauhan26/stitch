@@ -33,7 +33,7 @@ function PipelineEditor({ stages, onChange }) {
           </>}
         </div>
       ))}
-      <button type="button" className="btn sm" style={{ alignSelf: 'flex-start' }} onClick={() => { const at = stages.findIndex((s) => s.type !== 'open'); const next = [...stages]; next.splice(at, 0, { name: '', type: 'open' }); onChange(next); }}><Icon name="plus" small />Add custom stage</button>
+      <button type="button" className="btn sm" style={{ alignSelf: 'flex-start' }} onClick={() => { const at = stages.findIndex((s) => s.type !== 'open'); const next = [...stages]; next.splice(at, 0, { name: '', type: 'open' }); onChange(next); }}><Icon name="plus" small />Add a stage</button>
     </div>
   );
 }
@@ -79,15 +79,15 @@ function BrandSetup({ brand, onSaved }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
       <section className="tbl" style={box}>
-        <div className="lbl">{brand.name} · custom stages & pipeline</div>
-        <span className="mut" style={{ fontSize: 12 }}>Rename, reorder, remove, or add custom lead stages below. Won creates the order and Lost closes the lead. A stage with leads in it cannot be removed.</span>
+        <div className="lbl">{brand.name} · lead pipeline</div>
+        <span className="mut" style={{ fontSize: 12 }}>The stages this brand's leads move through. Renaming a stage keeps its leads; a stage with leads in it cannot be removed. Orders use the same pipeline for every brand.</span>
         <PipelineEditor stages={stages} onChange={setStages} />
         {dirty && <div style={{ display: 'flex', gap: 8 }}><button type="button" className="btn pri" onClick={savePipeline}>Save pipeline</button><button type="button" className="btn gh" onClick={load}>Undo changes</button></div>}
       </section>
 
       <section className="tbl" style={box}>
-        <div className="lbl">{brand.name} · fields & requirements by stage</div>
-        <span className="mut" style={{ fontSize: 12 }}>Use the <b>Requirement</b> selector on each field to switch between Optional, Required (needed), and Required + gate (blocking). Use <b>Hide field</b> to remove it from this brand; hidden standard fields can be restored below.</span>
+        <div className="lbl">{brand.name} · fields by stage</div>
+        <span className="mut" style={{ fontSize: 12 }}><b>Needed</b> fields show up as gaps. <b>Blocking</b> fields are gates: the record cannot cross the next stage until they have a value. The current level is shown for every field and can be changed here.</span>
         {data.pipeline.filter((s) => s.type === 'open').map((s) => {
           const here = data.fields.filter((f) => f.stage === s.name && f.level);
           return (
@@ -101,10 +101,10 @@ function BrandSetup({ brand, onSaved }) {
                   </span>
                   <span className="mut">{f.scope === 'item' ? 'each product' : f.scope === 'client' ? 'customer' : 'lead'} · {TYPES.find((t) => t[0] === f.type)?.[1] ?? f.type}</span>
                   <select className="inp" value={f.stage} onChange={(e) => update(f.key, { stage: e.target.value }, `${f.label} moved to ${e.target.value}`)} style={{ height: 28, fontSize: 12 }}>{open.map((x) => <option key={x}>{x}</option>)}</select>
-                  <select className="inp" aria-label={`${f.label} requirement`} value={f.level} disabled={f.locked && !admin} onChange={(e) => update(f.key, { level: e.target.value }, `${f.label} is now ${e.target.value}`)} style={{ height: 28, fontSize: 12 }}>
-                    <option value="optional">Optional</option><option value="needed">Required (needed)</option><option value="blocking">Required + gate</option>
+                  <select className="inp" value={f.level} disabled={f.locked && !admin} onChange={(e) => update(f.key, { level: e.target.value }, `${f.label} is now ${e.target.value}`)} style={{ height: 28, fontSize: 12 }}>
+                    {['optional', 'needed', 'blocking'].map((l) => <option key={l} value={l}>{l[0].toUpperCase() + l.slice(1)}{l === 'blocking' ? ' (gate)' : ''}</option>)}
                   </select>
-                  {!f.locked || admin ? <button type="button" className="btn gh sm" title="Hide this field for this brand" onClick={() => update(f.key, { level: null }, `${f.label} hidden for ${brand.name}`)}>Hide field</button> : <span />}
+                  {!f.locked || admin ? <button type="button" className="tw" title="Hide this field for this brand" onClick={() => update(f.key, { level: null }, `${f.label} hidden for ${brand.name}`)}><Icon name="x" small /></button> : <span />}
                 </div>
               ))}
               {here.length === 0 && <span className="mut" style={{ fontSize: 12 }}>Nothing asked at this stage.</span>}
@@ -125,10 +125,10 @@ function BrandSetup({ brand, onSaved }) {
                   </span>
                   <span className="mut">{f.scope === 'item' ? 'each product' : f.scope === 'client' ? 'customer' : 'order'} · {TYPES.find((t) => t[0] === f.type)?.[1] ?? f.type}</span>
                   <select className="inp" value={f.stage} onChange={(e) => update(f.key, { stage: e.target.value }, `${f.label} moved to ${e.target.value}`, 'order', f)} style={{ height: 28, fontSize: 12 }}>{data.order_stages.map((x) => <option key={x}>{x}</option>)}</select>
-                  <select className="inp" aria-label={`${f.label} requirement`} value={f.level} disabled={f.locked && !admin} onChange={(e) => update(f.key, { level: e.target.value }, `${f.label} is now ${e.target.value}`, 'order', f)} style={{ height: 28, fontSize: 12 }}>
-                    <option value="optional">Optional</option><option value="needed">Required (needed)</option><option value="blocking">Required + gate</option>
+                  <select className="inp" value={f.level} disabled={f.locked && !admin} onChange={(e) => update(f.key, { level: e.target.value }, `${f.label} is now ${e.target.value}`, 'order', f)} style={{ height: 28, fontSize: 12 }}>
+                    {['optional', 'needed', 'blocking'].map((l) => <option key={l} value={l}>{l[0].toUpperCase() + l.slice(1)}{l === 'blocking' ? ' (gate)' : ''}</option>)}
                   </select>
-                  {!f.locked || admin ? <button type="button" className="btn gh sm" title="Hide this field for this brand" onClick={() => update(f.key, { level: null }, `${f.label} hidden for ${brand.name}`, 'order', f)}>Hide field</button> : <span />}
+                  {!f.locked || admin ? <button type="button" className="tw" title="Hide this field for this brand" onClick={() => update(f.key, { level: null }, `${f.label} hidden for ${brand.name}`, 'order', f)}><Icon name="x" small /></button> : <span />}
                 </div>
               ))}
               {here.length === 0 && <span className="mut" style={{ fontSize: 12 }}>Nothing asked at this stage.</span>}
