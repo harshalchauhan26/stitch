@@ -3,7 +3,7 @@
 **Status:** Draft for review · **Date:** 19 Oct 2026 · **Database:** MongoDB
 **Based on:** `Stitch_Field_Flow_10_page.md` (the Field & Flow doc). Where this plan says "spec", it means that doc.
 
-**Changes, 20 Oct (CEO):** each brand can have its own lead pipeline and its own custom fields (§4.3). The order pipeline stays the same for every brand. Custom fields are optional or needed, never blocking.
+**Changes, 20 Oct (CEO):** each brand can have its own lead pipeline and its own custom fields (§4.3). The order pipeline stays the same for every brand. Custom fields are optional, needed, or blocking when a brand chooses to gate a stage.
 
 **Changes, 19 Oct (review with Harshal):** added products (§5.16), full order details (§5.12), customisations with versioned corrections (§5.17), a payments ledger (§5.18), dispatches with a weekly view (§5.19), and deployment on Render (§18).
 
@@ -133,7 +133,7 @@ The agency's sales team sets each brand up at onboarding:
 
 - **Lead pipeline.** The brand's own list of stages (a single-select status). Each stage has a type: **open** stages are worked through in order, the **won** stage creates the order (whatever the brand calls it, e.g. "Confirmed"), and the **lost** stage closes the lead. The default is the spec's stages. Template rules are placed on the stage at the same relative position, so the payment gate always sits on the stage before won.
 - **Editing a pipeline.** Renaming a stage moves its leads and rules with it. A stage that still has leads cannot be removed; once empty, its rules move to the stage before it. Every change is logged.
-- **Custom fields.** A brand can add its own fields (text, number, date, dropdown, yes/no, link), on the lead or on each product, at a chosen stage, as optional or needed. Only that brand sees them. They are stored in the same `fields` bag, show up as gaps when needed, and are copied to the order at won.
+- **Custom fields.** A brand can add its own fields (text, number, date, dropdown, yes/no, link), on the lead or on each product, at a chosen stage, as optional, needed, or blocking. Only that brand sees them. They are stored in the same `fields` bag, show up as gaps when needed or blocking, block the configured stage transition when blocking, and are copied to the order at won.
 - **Order pipeline.** The same for every brand: it is the agency's fulfilment process.
 
 ---

@@ -77,7 +77,7 @@ function BrandSetup({ brand, onSaved }) {
 
       <section className="tbl" style={box}>
         <div className="lbl">{brand.name} · fields by stage</div>
-        <span className="mut" style={{ fontSize: 12 }}><b>Needed</b> fields show up as gaps. <b>Blocking</b> fields also stop the lead moving on. A brand's own fields are never blocking.</span>
+        <span className="mut" style={{ fontSize: 12 }}><b>Needed</b> fields show up as gaps. <b>Blocking</b> fields are gates: the lead cannot cross the next stage until they have a value. The current level is shown for every field and can be changed here.</span>
         {data.pipeline.filter((s) => s.type === 'open').map((s) => {
           const here = data.fields.filter((f) => f.stage === s.name && f.level);
           return (
@@ -86,13 +86,13 @@ function BrandSetup({ brand, onSaved }) {
               {here.map((f) => (
                 <div key={f.key} style={{ display: 'grid', gridTemplateColumns: '1fr 110px 150px 170px 30px', gap: 8, alignItems: 'center', fontSize: 12, padding: '4px 0', borderTop: '1px solid var(--ln2)' }}>
                   <span style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-                    {f.label}{f.custom && <span className="chip blu" style={{ fontSize: 10, height: 18 }}>brand</span>}{f.locked && <span className="chip red" style={{ fontSize: 10, height: 18 }} title="Only an admin can lower this">gate</span>}
+                    {f.label}{f.custom && <span className="chip blu" style={{ fontSize: 10, height: 18 }}>brand</span>}{f.level === 'blocking' && <span className="chip red" style={{ fontSize: 10, height: 18 }} title={f.locked ? 'Only an admin can lower this default gate' : 'This field gates the next stage'}>gate</span>}
                     {f.computed && <span className="chip" style={{ fontSize: 10, height: 18 }}>filled by Stitch</span>}
                   </span>
                   <span className="mut">{f.scope === 'item' ? 'each product' : f.scope === 'client' ? 'customer' : 'lead'} · {TYPES.find((t) => t[0] === f.type)?.[1] ?? f.type}</span>
                   <select className="inp" value={f.stage} onChange={(e) => update(f.key, { stage: e.target.value }, `${f.label} moved to ${e.target.value}`)} style={{ height: 28, fontSize: 12 }}>{open.map((x) => <option key={x}>{x}</option>)}</select>
                   <select className="inp" value={f.level} disabled={f.locked && !admin} onChange={(e) => update(f.key, { level: e.target.value }, `${f.label} is now ${e.target.value}`)} style={{ height: 28, fontSize: 12 }}>
-                    {(f.custom ? ['optional', 'needed'] : ['optional', 'needed', 'blocking']).map((l) => <option key={l} value={l}>{l[0].toUpperCase() + l.slice(1)}</option>)}
+                    {['optional', 'needed', 'blocking'].map((l) => <option key={l} value={l}>{l[0].toUpperCase() + l.slice(1)}{l === 'blocking' ? ' (gate)' : ''}</option>)}
                   </select>
                   {!f.locked ? <button type="button" className="tw" title="Hide this field for this brand" onClick={() => update(f.key, { level: null }, `${f.label} hidden for ${brand.name}`)}><Icon name="x" small /></button> : <span />}
                 </div>
@@ -109,7 +109,7 @@ function BrandSetup({ brand, onSaved }) {
             {nf.type === 'select' && <><span className="mut">Options</span><input className="inp" value={nf.options} onChange={(e) => setNf({ ...nf, options: e.target.value })} placeholder="Comma separated, e.g. No, Once, Twice" /></>}
             <span className="mut">Asked for</span><select className="inp" value={nf.scope} onChange={(e) => setNf({ ...nf, scope: e.target.value })}><option value="lead">The lead (once)</option><option value="item">Each product</option></select>
             <span className="mut">At stage</span><select className="inp" value={nf.stage} onChange={(e) => setNf({ ...nf, stage: e.target.value })}>{open.map((x) => <option key={x}>{x}</option>)}</select>
-            <span className="mut">Level</span><select className="inp" value={nf.level} onChange={(e) => setNf({ ...nf, level: e.target.value })}><option value="optional">Optional</option><option value="needed">Needed (shows as a gap)</option></select>
+            <span className="mut">Level</span><select className="inp" value={nf.level} onChange={(e) => setNf({ ...nf, level: e.target.value })}><option value="optional">Optional</option><option value="needed">Needed (shows as a gap)</option><option value="blocking">Blocking (gate)</option></select>
             <span />
             <div style={{ display: 'flex', gap: 8 }}><button type="button" className="btn pri" disabled={!nf.label.trim() || (nf.type === 'select' && !nf.options.trim())} onClick={createField}>Add field</button><button type="button" className="btn gh" onClick={() => setNf(null)}>Cancel</button></div>
           </div>
