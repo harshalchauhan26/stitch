@@ -45,6 +45,7 @@ function BrandSetup({ brand, onSaved }) {
   const [stages, setStages] = useState(null);
   const [nf, setNf] = useState(null);
   const [add, setAdd] = useState({ key: '', stage: '', level: 'optional' });
+  const [addOrder, setAddOrder] = useState({ key: '', stage: '', level: 'optional' });
   const admin = user?.role === 'admin';
   const load = useCallback(() => api.brandFields(brand.id).then((d) => { setData(d); setStages(d.pipeline.map((s) => ({ ...s, orig: s.name }))); }).catch((e) => say(e.message)), [brand.id, say]);
   useEffect(() => { load(); }, [load]);
@@ -58,7 +59,16 @@ function BrandSetup({ brand, onSaved }) {
       say('Pipeline saved'); await load(); await reloadMe(); onSaved?.();
     } catch (e) { say(e.message); }
   };
-  const update = async (key, body, msg) => { try { const d = await api.updateBrandField(brand.id, key, body); setData(d); say(msg); } catch (e) { say(e.message); } };
+  const update = async (key, body, msg, recordType = 'lead', current = null) => {
+    try {
+      const d = recordType === 'lead'
+        ? await api.updateBrandField(brand.id, key, body)
+        : await api.updateBrandRule(brand.id, { record_type: recordType, stage: body.stage ?? current.stage, field: key, level: body.level === undefined ? current.level : body.level });
+      if (recordType === 'lead') setData(d);
+      else setData(await api.brandFields(brand.id));
+      say(msg);
+    } catch (e) { say(e.message); }
+  };
   const createField = async () => {
     try {
       const d = await api.addBrandField(brand.id, { ...nf, options: nf.type === 'select' ? nf.options.split(',').map((x) => x.trim()).filter(Boolean) : undefined });
@@ -77,7 +87,7 @@ function BrandSetup({ brand, onSaved }) {
 
       <section className="tbl" style={box}>
         <div className="lbl">{brand.name} · fields by stage</div>
-        <span className="mut" style={{ fontSize: 12 }}><b>Needed</b> fields show up as gaps. <b>Blocking</b> fields are gates: the lead cannot cross the next stage until they have a value. The current level is shown for every field and can be changed here.</span>
+        <span className="mut" style={{ fontSize: 12 }}><b>Needed</b> fields show up as gaps. <b>Blocking</b> fields are gates: the record cannot cross the next stage until they have a value. The current level is shown for every field and can be changed here.</span>
         {data.pipeline.filter((s) => s.type === 'open').map((s) => {
           const here = data.fields.filter((f) => f.stage === s.name && f.level);
           return (
@@ -94,13 +104,52 @@ function BrandSetup({ brand, onSaved }) {
                   <select className="inp" value={f.level} disabled={f.locked && !admin} onChange={(e) => update(f.key, { level: e.target.value }, `${f.label} is now ${e.target.value}`)} style={{ height: 28, fontSize: 12 }}>
                     {['optional', 'needed', 'blocking'].map((l) => <option key={l} value={l}>{l[0].toUpperCase() + l.slice(1)}{l === 'blocking' ? ' (gate)' : ''}</option>)}
                   </select>
-                  {!f.locked ? <button type="button" className="tw" title="Hide this field for this brand" onClick={() => update(f.key, { level: null }, `${f.label} hidden for ${brand.name}`)}><Icon name="x" small /></button> : <span />}
+                  {!f.locked || admin ? <button type="button" className="tw" title="Hide this field for this brand" onClick={() => update(f.key, { level: null }, `${f.label} hidden for ${brand.name}`)}><Icon name="x" small /></button> : <span />}
                 </div>
               ))}
               {here.length === 0 && <span className="mut" style={{ fontSize: 12 }}>Nothing asked at this stage.</span>}
             </div>
           );
         })}
+        <div className="lbl" style={{ marginTop: 14, borderTop: '1px solid var(--ln)', paddingTop: 14 }}>{brand.name} · order fields by stage</div>
+        {data.order_stages.map((stage) => {
+          const here = data.order.fields.filter((f) => f.stage === stage && f.level);
+          return (
+            <div key={stage} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <div style={{ fontWeight: 600, fontSize: 12, marginTop: 6 }}>{stage}</div>
+              {here.map((f) => (
+                <div key={f.key} style={{ display: 'grid', gridTemplateColumns: '1fr 110px 150px 170px 30px', gap: 8, alignItems: 'center', fontSize: 12, padding: '4px 0', borderTop: '1px solid var(--ln2)' }}>
+                  <span style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                    {f.label}{f.level === 'blocking' && <span className="chip red" style={{ fontSize: 10, height: 18 }} title={f.locked ? 'Only an admin can lower this default gate' : 'This field gates the next stage'}>gate</span>}
+                    {f.computed && <span className="chip" style={{ fontSize: 10, height: 18 }}>filled by Stitch</span>}
+                  </span>
+                  <span className="mut">{f.scope === 'item' ? 'each product' : f.scope === 'client' ? 'customer' : 'order'} · {TYPES.find((t) => t[0] === f.type)?.[1] ?? f.type}</span>
+                  <select className="inp" value={f.stage} onChange={(e) => update(f.key, { stage: e.target.value }, `${f.label} moved to ${e.target.value}`, 'order', f)} style={{ height: 28, fontSize: 12 }}>{data.order_stages.map((x) => <option key={x}>{x}</option>)}</select>
+                  <select className="inp" value={f.level} disabled={f.locked && !admin} onChange={(e) => update(f.key, { level: e.target.value }, `${f.label} is now ${e.target.value}`, 'order', f)} style={{ height: 28, fontSize: 12 }}>
+                    {['optional', 'needed', 'blocking'].map((l) => <option key={l} value={l}>{l[0].toUpperCase() + l.slice(1)}{l === 'blocking' ? ' (gate)' : ''}</option>)}
+                  </select>
+                  {!f.locked || admin ? <button type="button" className="tw" title="Hide this field for this brand" onClick={() => update(f.key, { level: null }, `${f.label} hidden for ${brand.name}`, 'order', f)}><Icon name="x" small /></button> : <span />}
+                </div>
+              ))}
+              {here.length === 0 && <span className="mut" style={{ fontSize: 12 }}>Nothing asked at this stage.</span>}
+            </div>
+          );
+        })}
+        {data.order.available.length > 0 && (
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 10 }}>
+            <span className="mut" style={{ fontSize: 12 }}>Restore a standard order field:</span>
+            <select className="inp" value={addOrder.key} onChange={(e) => setAddOrder({ ...addOrder, key: e.target.value })} style={{ height: 28, fontSize: 12 }}>
+              <option value="">Choose…</option>{data.order.available.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
+            </select>
+            <select className="inp" value={addOrder.stage || data.order_stages[0]} onChange={(e) => setAddOrder({ ...addOrder, stage: e.target.value })} style={{ height: 28, fontSize: 12 }}>
+              {data.order_stages.map((x) => <option key={x}>{x}</option>)}
+            </select>
+            <button type="button" className="btn sm" disabled={!addOrder.key} onClick={() => {
+              update(addOrder.key, { stage: addOrder.stage || data.order_stages[0], level: 'optional' }, 'Order field restored', 'order', { stage: addOrder.stage || data.order_stages[0], level: 'optional' });
+              setAddOrder({ key: '', stage: '', level: 'optional' });
+            }}>Restore</button>
+          </div>
+        )}
         {nf ? (
           <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', gap: 8, alignItems: 'center', padding: 12, border: '1px solid var(--gold)', borderRadius: 8 }}>
             <span className="lbl" style={{ gridColumn: '1 / -1' }}>New field for {brand.name}</span>
