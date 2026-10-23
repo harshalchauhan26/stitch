@@ -130,6 +130,7 @@ export default function LeadDrawer({ id, onClose, onChanged }) {
             {d.converted_order_id && <Link className="chip grn" to={`/orders/${d.converted_order_id}`}>Open the order</Link>}
             {d.lost_reason && <span className="chip">Lost: {d.lost_reason}</span>}
           </div>
+          {canOverride && <Link to={`/settings/brands?brand=${d.brand.id}`} style={{ fontSize: 12, alignSelf: 'flex-start' }}>Edit {d.brand.name}'s stages and fields</Link>}
           <div className="stg">{flow.map((s, i) => (
             <span key={s.name} className={i < idx ? 'past' : i === idx ? 'cur' : ''} style={{ cursor: open && i !== idx ? 'pointer' : undefined }}
               title={open && i !== idx ? `Move to ${s.name}` : undefined} onClick={() => open && i !== idx && move(s.name)}>{s.name}</span>

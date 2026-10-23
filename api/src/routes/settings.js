@@ -1,11 +1,11 @@
 // Field catalogue, templates and "Set Required" (spec §5.5, PLAN §14 Settings)
 import { Router } from 'express';
-import { GATE_FIELDS } from '../catalogue.js';
+import { CORE_FIELDS, GATE_FIELDS } from '../catalogue.js';
 import { LEVELS } from '../lib/constants.js';
 import { badRequest, forbidden } from '../lib/errors.js';
 import { id, oneOf } from '../lib/validate.js';
 import { AuditLog, Brand, BrandTemplate, FieldDef, RequiredRule } from '../models/index.js';
-import { brandFields, createCustomField, stagesFor, updateBrandField, updatePipeline } from '../services/brandConfig.js';
+import { brandFields, createCustomField, CUSTOM_LEVELS, stagesFor, updateBrandField, updatePipeline } from '../services/brandConfig.js';
 import { recountLeads } from '../services/recount.js';
 import { actorFor, requireBrand, requireRole } from '../services/scope.js';
 
@@ -55,7 +55,8 @@ settingsRouter.put('/brands/:id/rules', async (req, res) => {
     const stage = oneOf(raw.stage, 'stage', stagesFor(brand, record_type), { required: true });
     const def = defs.get(raw.field);
     if (!def || !def.record_types.includes(record_type)) throw badRequest(`Field "${raw.field}" does not exist for ${record_type}s`);
-    const level = raw.level === null ? null : oneOf(raw.level, 'level', LEVELS, { required: true });
+    const level = raw.level === null ? null : oneOf(raw.level, 'level', def.brand_id ? CUSTOM_LEVELS : LEVELS, { required: true });
+    if (CORE_FIELDS.includes(def.key) && (level === null || level === 'optional')) throw badRequest(`${def.label} is needed on every lead: it cannot be made optional or removed`);
     const key = { tenant_id: req.scope.tenantId, brand_id: brandId, record_type, stage, field: def.key };
     const existing = await RequiredRule.findOne(key).lean();
     // a gate field is protected wherever it is defined, not just on its original rule

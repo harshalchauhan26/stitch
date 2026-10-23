@@ -114,6 +114,9 @@ export const ORDER_PATHS = {
   karigar: 'production.karigar', production_eta: 'production.eta', production_completed: 'production.completed_at', qc_result: 'qc.result',
 };
 
+// Every lead needs these, for every brand: they are always Needed and cannot be removed from a brand.
+export const CORE_FIELDS = ['client_name', 'phone', 'product'];
+
 // The six Blocking fields from spec §1.3. Only an admin can lower them (spec §5.5).
 export const GATE_FIELDS = ['advance_amount', 'payment_link_sent', 'customer_sign_off', 'customer_approval', 'balance_payment', 'address_confirmed'];
 

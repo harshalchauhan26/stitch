@@ -1,4 +1,5 @@
 // Per-brand setup done by the agency at onboarding: the lead pipeline and the brand's own custom fields.
+import { CORE_FIELDS, GATE_FIELDS } from '../catalogue.js';
 import { withTransaction } from '../db.js';
 import { ORDER_STAGES } from '../lib/constants.js';
 import { badRequest, conflict, notFound } from '../lib/errors.js';
@@ -9,7 +10,7 @@ import { actorFor } from './scope.js';
 
 const LEVEL_RANK = { optional: 0, needed: 1, blocking: 2 };
 export const CUSTOM_TYPES = ['text', 'longtext', 'number', 'currency', 'date', 'select', 'bool', 'url'];
-export const CUSTOM_LEVELS = ['optional', 'needed', 'blocking'];
+export const CUSTOM_LEVELS = ['optional', 'needed'];        // custom fields never block a stage (CEO, 20 Oct)
 
 async function brandOr404(scope, brandId, session) {
   const b = await Brand.findOne({ _id: brandId, tenant_id: scope.tenantId }).session(session ?? null);
@@ -87,31 +88,27 @@ const slug = (label) => {
   return /^[a-z]/.test(s) ? s : `f_${s}`;
 };
 
-/** Every field this brand uses, with its stage and level, plus catalogue fields it does not use yet (for Settings). */
+/** Every lead field this brand uses, with its stage and level, plus catalogue fields it does not use yet (for Settings) */
 export async function brandFields(scope, brandId) {
   const brand = await brandOr404(scope, brandId);
   const [defs, rules] = await Promise.all([
-    FieldDef.find({ tenant_id: scope.tenantId, brand_id: { $in: [null, brand._id] }, record_types: { $in: ['lead', 'order'] } }).lean(),
-    RequiredRule.find({ brand_id: brand._id, record_type: { $in: ['lead', 'order'] } }).lean(),
+    FieldDef.find({ tenant_id: scope.tenantId, brand_id: { $in: [null, brand._id] }, record_types: 'lead' }).lean(),
+    RequiredRule.find({ brand_id: brand._id, record_type: 'lead' }).lean(),
   ]);
   const p = pipelineOf(brand);
-  const rulesByType = { lead: new Map(), order: new Map() };
-  for (const rule of rules) rulesByType[rule.record_type].set(rule.field, rule);
+  const ruleOf = new Map(rules.map((r) => [r.field, r]));
   const dto = (d) => ({
     key: d.key, label: d.label, scope: d.scope, type: d.type, options: d.options ?? null, unit: d.unit, hint: d.hint, computed: d.computed,
-    custom: !!d.brand_id, active: d.active,
+    custom: !!d.brand_id, active: d.active, stage: ruleOf.get(d.key)?.stage ?? null, level: ruleOf.get(d.key)?.level ?? null, locked: !!ruleOf.get(d.key)?.locked,
+    core: CORE_FIELDS.includes(d.key), gate: GATE_FIELDS.includes(d.key),
   });
-  const fieldsFor = (recordType, stages) => {
-    const ruleOf = rulesByType[recordType];
-    const candidates = defs.filter((d) => d.record_types.includes(recordType));
-    const withRule = (d) => ({ ...dto(d), stage: ruleOf.get(d.key)?.stage ?? null, level: ruleOf.get(d.key)?.level ?? null, locked: !!ruleOf.get(d.key)?.locked });
-    const sort = (a, b) => stages.indexOf(a.stage) - stages.indexOf(b.stage) || a.label.localeCompare(b.label);
-    return {
-      fields: candidates.filter((d) => ruleOf.has(d.key) || d.brand_id).map(withRule).sort(sort),
-      available: candidates.filter((d) => !d.brand_id && !ruleOf.has(d.key) && d.active).map(withRule).sort((a, b) => a.label.localeCompare(b.label)),
-    };
+  const used = defs.filter((d) => ruleOf.has(d.key) && d.active).map(dto).sort((a, b) => p.open.indexOf(a.stage) - p.open.indexOf(b.stage) || a.label.localeCompare(b.label));
+  return {
+    pipeline: p.stages,
+    fields: used,
+    // fields this brand does not ask for (standard ones it never used, and any it removed, its own included): can be added back
+    available: defs.filter((d) => !ruleOf.has(d.key) && d.active).map(dto).sort((a, b) => a.label.localeCompare(b.label)),
   };
-  return { pipeline: p.stages, order_stages: ORDER_STAGES, ...fieldsFor('lead', p.open), order: fieldsFor('order', ORDER_STAGES) };
 }
 
 function fieldShape(body, existing) {
@@ -137,7 +134,7 @@ function fieldShape(body, existing) {
   return out;
 }
 
-/** body: { label, type, scope: lead|item, options?, unit?, min?, max?, hint?, stage?, level?: optional|needed|blocking } */
+/** body: { label, type, scope: lead|item, options?, unit?, min?, max?, hint?, stage?, level?: optional|needed } */
 export async function createCustomField(scope, brandId, body = {}) {
   const shape = fieldShape(body);
   const level = oneOf(body.level, 'Level', CUSTOM_LEVELS) ?? 'optional';
@@ -177,6 +174,7 @@ export async function updateBrandField(scope, brandId, key, body = {}) {
       const rule = await RequiredRule.findOne({ brand_id: brand._id, record_type: 'lead', field: key }).session(session);
       if (rule?.locked && body.level !== undefined && body.level !== 'blocking' && scope.user.role !== 'admin') throw badRequest('Only an admin can lower a gate field');
       const level = body.level === null ? null : oneOf(body.level, 'Level', custom ? CUSTOM_LEVELS : ['optional', 'needed', 'blocking']) ?? rule?.level ?? 'optional';
+      if (CORE_FIELDS.includes(key) && (level === null || level === 'optional')) throw badRequest(`${def.label} is needed on every lead: it cannot be made optional or removed`);
       const stage = body.stage !== undefined ? oneOf(body.stage, 'Stage', p.open, { required: true }) : rule?.stage ?? p.open[0];
       if (level === null) { if (rule) await rule.deleteOne({ session }); }          // hide the field for this brand
       else if (rule) { rule.stage = stage; rule.level = level; rule.updated_by = scope.user._id; await rule.save({ session }); }

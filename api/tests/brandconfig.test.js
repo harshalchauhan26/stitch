@@ -25,13 +25,6 @@ describe('custom pipeline per brand', () => {
     assert.equal(at('client_name').stage, 'New enquiry');
     assert.equal(at('advance_amount').stage, 'Trial');
     assert.equal(at('advance_amount').level, 'blocking');
-    const fields = ok(await t.api('GET', `/brands/${kh.id}/fields`, undefined, o.admin));
-    assert.ok(fields.order.fields.some((f) => f.key === 'customer_sign_off' && f.stage === 'Measurements' && f.level === 'blocking'));
-    assert.deepEqual(fields.order_stages.slice(0, 3), ['Created', 'Spec locked', 'Measurements']);
-    const changed = ok(await t.api('PUT', `/brands/${kh.id}/rules`, {
-      rules: [{ record_type: 'order', stage: 'Production', field: 'customer_sign_off', level: 'blocking' }],
-    }, o.admin));
-    assert.equal(changed[0].stage, 'Production');
   });
 
   test('a lead walks the brand\'s stages, and its won stage creates the order', async () => {
@@ -63,11 +56,12 @@ describe('custom pipeline per brand', () => {
 });
 
 describe('custom fields per brand', () => {
-  test('a brand gets its own field; other brands cannot use it; it can be made a gate', async () => {
+  test('a brand gets its own field; other brands cannot use it; it cannot block', async () => {
     assert.equal((await t.api('POST', `/brands/${kh.id}/fields`, { label: 'Resizing', type: 'bool' }, o.tokens.priya)).status, 403, 'sales cannot change setup');
-    const r = ok(await t.api('POST', `/brands/${kh.id}/fields`, { label: 'Resizing allowed', type: 'select', options: ['No', 'Once', 'Twice'], scope: 'item', stage: 'Consultation', level: 'blocking' }, o.admin), 201);
+    assert.equal((await t.api('POST', `/brands/${kh.id}/fields`, { label: 'Resizing', type: 'bool', level: 'blocking' }, o.admin)).status, 400);
+    const r = ok(await t.api('POST', `/brands/${kh.id}/fields`, { label: 'Resizing allowed', type: 'select', options: ['No', 'Once', 'Twice'], scope: 'item', stage: 'Consultation', level: 'needed' }, o.admin), 201);
     const f = r.fields.find((x) => x.label === 'Resizing allowed');
-    assert.deepEqual([f.key, f.custom, f.stage, f.level, f.scope], ['resizing_allowed', true, 'Consultation', 'blocking', 'item']);
+    assert.deepEqual([f.key, f.custom, f.stage, f.level, f.scope], ['resizing_allowed', true, 'Consultation', 'needed', 'item']);
     assert.equal((await t.api('POST', `/brands/${kh.id}/fields`, { label: 'resizing allowed', type: 'text' }, o.admin)).status, 409);
     ok(await t.api('POST', `/brands/${kh.id}/fields`, { label: 'Alteration rounds included', type: 'number', min: 0, max: 5 }, o.admin), 201);
 
@@ -77,11 +71,10 @@ describe('custom fields per brand', () => {
     const na = await t.api('POST', '/leads', { brand_id: o.na.id, client: { phone: '+91 96000 00004' }, fields: { alteration_rounds_included: 1 } }, o.tokens.priya);
     assert.equal(na.status, 400, 'Noor Atelier does not have this field');
 
-    // a custom gate shows as a blocking gap at its stage and prevents crossing it
+    // a needed custom field shows as a gap at its stage, like any other field
     lead = ok(await t.api('POST', '/leads', { brand_id: kh.id, client: { phone: '+91 96000 00005' }, items: [{ product: 'Saree' }] }, o.tokens.priya), 201);
     lead = ok(await t.api('POST', `/leads/${lead.id}/stage`, { version: lead.version, to: 'Consultation' }, o.tokens.priya));
-    assert.ok(lead.gaps.some((g) => g.field === 'resizing_allowed' && g.level === 'blocking' && g.item_label === 'Item 1 · Saree'));
-    assert.equal((await t.api('POST', `/leads/${lead.id}/stage`, { version: lead.version, to: 'Trial' }, o.tokens.priya)).status, 422);
+    assert.ok(lead.gaps.some((g) => g.field === 'resizing_allowed' && g.item_label === 'Item 1 · Saree'));
   });
 
   test('a field can be renamed, moved to another stage, or hidden', async () => {
@@ -121,5 +114,33 @@ describe('editing a pipeline', () => {
   test('a pipeline needs exactly one won and one lost stage', async () => {
     const r = await t.api('PUT', `/brands/${kh.id}/pipeline`, { stages: [{ name: 'A', type: 'open' }, { name: 'B', type: 'lost' }] }, o.admin);
     assert.equal(r.status, 400);
+  });
+});
+
+describe('switching fields between optional and needed', () => {
+  test('any field can switch, core fields stay needed, removed fields can be added back', async () => {
+    // switch both ways
+    let r = ok(await t.api('PATCH', `/brands/${o.na.id}/fields/dupatta_border`, { level: 'optional' }, o.admin));
+    assert.equal(r.fields.find((f) => f.key === 'dupatta_border').level, 'optional');
+    r = ok(await t.api('PATCH', `/brands/${o.na.id}/fields/dupatta_border`, { level: 'needed' }, o.admin));
+    assert.equal(r.fields.find((f) => f.key === 'dupatta_border').level, 'needed');
+    // core fields: always needed, cannot be removed
+    for (const key of ['client_name', 'phone', 'product']) {
+      for (const level of ['optional', null]) {
+        const bad = await t.api('PATCH', `/brands/${o.na.id}/fields/${key}`, { level }, o.admin);
+        assert.equal(bad.status, 400, `${key} -> ${level}`);
+        assert.match(bad.body.error, /needed on every lead/);
+      }
+    }
+    assert.ok(r.fields.find((f) => f.key === 'phone').core);
+    // a brand's own field, removed, shows up again under "add back"
+    ok(await t.api('POST', `/brands/${o.na.id}/fields`, { label: 'Padding', type: 'bool', scope: 'item', stage: 'Customising' }, o.admin), 201);
+    r = ok(await t.api('PATCH', `/brands/${o.na.id}/fields/padding`, { level: null }, o.admin));
+    assert.ok(!r.fields.some((f) => f.key === 'padding'));
+    assert.ok(r.available.some((f) => f.key === 'padding' && f.custom));
+    r = ok(await t.api('PATCH', `/brands/${o.na.id}/fields/padding`, { stage: 'Customising', level: 'needed' }, o.admin));
+    assert.equal(r.fields.find((f) => f.key === 'padding').level, 'needed');
+    // a brand's own field still cannot be a gate
+    assert.equal((await t.api('PATCH', `/brands/${o.na.id}/fields/padding`, { level: 'blocking' }, o.admin)).status, 400);
   });
 });
