@@ -1,7 +1,8 @@
-// Demo organisation for walkthroughs: brands (with their own fields and pipelines), teams, people and products.
-// Leads are entered by hand during the demo.
-//   npm run seed:demo             adds the demo org if there are no brands yet
-//   npm run seed:demo -- --reset  wipes the database first (refused in production unless ALLOW_RESET=yes)
+// Demo organisation for walkthroughs: brands (with their own fields and pipelines), teams, people, products,
+// and a realistic sample book of customers at every stage (scripts/sample-book.js).
+//   npm run seed:demo                      adds the demo org if there are no brands yet
+//   npm run seed:demo -- --reset           wipes the database first (refused in production unless ALLOW_RESET=yes)
+//   npm run seed:demo -- --reset --empty   the org only, no sample customers (enter every lead live)
 import '../src/env.js';
 import mongoose from 'mongoose';
 import { firstAdmin, loadConfig } from '../src/config.js';
@@ -12,6 +13,7 @@ import { bootstrap } from '../src/services/bootstrap.js';
 import { createCustomField } from '../src/services/brandConfig.js';
 import { createBrand } from '../src/services/brands.js';
 import { loadScope } from '../src/services/scope.js';
+import { addSampleBook } from './sample-book.js';
 
 const config = loadConfig();
 const reset = process.argv.includes('--reset');
@@ -80,7 +82,9 @@ await Product.insertMany([
   { brand_id: vm._id, sku: 'VM-BND-002', name: 'Bandhgala · charcoal', category: 'bandhgala', base_price: rupees(55000), lead_time_days: 21 },
 ].map((p) => ({ ...p, tenant_id: tenant._id, currency: 'INR' })));
 
-console.log(`Demo org ready.
+if (!process.argv.includes('--empty')) await addSampleBook();
+
+console.log(`Demo org ready${process.argv.includes('--empty') ? '' : ', with sample customers'}.
   Admin       ${first.email}${config.prod ? '' : ` / ${first.password}`}
   Sales       priya@stitch.test (Noor Atelier, Kesar House) · arjun@stitch.test (Veda Menswear)
   Pod lead    meera@stitch.test (all brands)

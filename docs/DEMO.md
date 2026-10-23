@@ -7,12 +7,28 @@ About 10 minutes. Everything below is entered by hand; nothing is read from chat
 ```bash
 cd api
 npm run mongo:dev              # local MongoDB (once per restart of the machine)
-npm run seed:demo -- --reset   # fresh demo org: 3 brands, 2 teams, 4 people, products. No leads.
+npm run seed:demo -- --reset   # fresh demo org: 3 brands, 2 teams, 4 people, products + a sample book of 13 customers
+                               # (add --empty for no sample customers; npm run seed:sample adds the book to an existing org)
 npm run dev                    # API on :4000
 cd ../frontend && npm run dev  # app on http://localhost:5173
 ```
 
 Logins (password `stitch123`): `admin@stitch.test` (agency admin), `priya@stitch.test` (sales, Team Alpha: Noor Atelier + Kesar House), `meera@stitch.test` (pod lead, all brands), `arjun@stitch.test` (sales, Team Beta: Veda Menswear).
+
+**The sample book** (so the boards look lived-in): every lead stage has someone in it, for example:
+- **Noor Atelier:**
+  - Sneha (new, lots of gaps);
+  - Ananya (customising);
+  - Ishita (quoted);
+  - **Riya (awaiting payment: the gate blocks Won, record her advance live)**;
+  - Tanvi (lost, on price).
+- **Kesar House:** Aditi (consultation), Pooja (design & trial).
+- **Veda Menswear:** Arjun (quoted), Rohan (new).
+- **Orders:**
+  - Meher, in production, with a measurement correction;
+  - **Vikram, ready to ship with ₹85,000 balance due: the shipment is blocked until it's paid**;
+  - Kavya, dispatched and in transit;
+  - Nandini, delivered this week, with an AWB correction.
 
 ## 1. Each brand is set up its own way (admin, 2 min)
 
