@@ -38,6 +38,11 @@ Most sources are vendor blogs (BSPs). Check numbers against Meta's own docs befo
   - Some 1:1 features are off: disappearing messages, live location.
   - India availability: newer sources (June 2026) say it's live globally, including India. Confirm with the BSP.
   - The number must already be in active use (not brand new) and pass Meta's quality checks.
+- **Linked-device slots:**
+  - The API **does not take a linked-device slot**. Meta sends messages to Stitch from its servers by webhook. It isn't a WhatsApp Web session, although no source says this outright.
+  - A "bot on a linked device" (WhatsApp Web automation such as whatsapp-web.js or Baileys) does take a slot. It's also unofficial, and the number can get banned.
+  - Under Coexistence the cap is 4 companion devices plus the phone. Meta One's "6 devices" may not apply on a Coexistence number. This is unconfirmed.
+  - If more people need access, they work from Stitch's inbox, which has no device limit.
 - **Policy:** Meta banned *general-purpose* AI chatbots (ChatGPT-style) from the API from 15 Jan 2026. A brand's own sales and support assistant is explicitly allowed, so we're fine.
 
 ## 3. Cost (India, 2026)
