@@ -45,6 +45,28 @@ Most sources are vendor blogs (BSPs). Check numbers against Meta's own docs befo
   - If more people need access, they work from Stitch's inbox, which has no device limit.
 - **Policy:** Meta banned *general-purpose* AI chatbots (ChatGPT-style) from the API from 15 Jan 2026. A brand's own sales and support assistant is explicitly allowed, so we're fine.
 
+### Does Coexistence lose data? (researched 6 Nov 2026)
+Our dev reports an account where data was lost and the account reset. From Meta's docs and providers' docs:
+- **The chats on the phone are not deleted.** Meta converts the existing account in place: same number, same account ID, and the app keeps working.
+- **What looks like a reset but isn't:**
+  - linked devices log out and show little history after re-scanning;
+  - the account becomes a "Messaging account" in Meta's systems;
+  - in the provider's tool, chats show only if history was shared on the phone **and** requested within 24 hours.
+- **What really loses data:**
+  - **The provider doesn't support Coexistence.** Entering a number that's already on the app into a normal API signup asks you to **delete the app account**, and that wipes the chats.
+  - Deleting the app account, or uninstalling the app, during or after setup.
+  - Disconnecting from the provider's side rather than from the app (Settings → Account → Business Platform → Disconnect).
+- **What stops the sync:** leaving the phone unopened for about 14 days, or reinstalling or moving to a new phone without the "keep connected" option.
+- **Requirements:** WhatsApp Business app 2.24.17 or newer (not normal WhatsApp), and the provider must be a Meta Solution Partner or Tech Provider with Coexistence switched on. Meta's flow starts Coexistence automatically when the number is already on the Business app.
+
+**Safety checklist for the pilot:**
+1. Back up chats to Google Drive from the phone and update the app.
+2. Use a low-stakes brand number.
+3. Pick a provider that says "Coexistence" by name. If a screen ever asks to delete the WhatsApp account, stop.
+4. Tap **share history** on the phone, and make sure the history request goes out within 24 hours.
+5. The next day, check the phone still has every chat, re-link the 4 devices, and confirm messages are reaching Stitch.
+6. Open the app at least weekly, and never uninstall it.
+
 ## 3. Cost (India, 2026)
 
 | What | Cost |
