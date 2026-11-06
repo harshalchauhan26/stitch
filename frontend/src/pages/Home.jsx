@@ -53,6 +53,7 @@ export default function Home() {
       </section>
       <section style={{ display: 'flex', gap: 12 }}>
         <Link className="qa" to="/leads/new"><Icon name="plus" />Add a lead by hand</Link>
+        <Link className="qa" to="/chats"><Icon name="chat" />Fill a lead from a WhatsApp chat</Link>
         <Link className="qa" to="/orders"><Icon name="orders" />Orders board</Link>
         <Link className="qa" to="/dispatches"><Icon name="truck" />This week's dispatches</Link>
       </section>

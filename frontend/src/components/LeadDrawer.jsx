@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import Icon from '../lib/Icon.jsx';
 import FieldControl, { LevelChip } from './FieldControl.jsx';
 import History from './History.jsx';
+import Suggestions from './Suggestions.jsx';
 import { api } from '../api/index.js';
 import { useApp } from '../context/AppContext.jsx';
 import { dayLabel, inr, phone, plural, toPaise, toRupees } from '../lib/format.js';
@@ -36,9 +37,14 @@ export default function LeadDrawer({ id, onClose, onChanged }) {
   const [pay, setPay] = useState(null);
   const [issue, setIssue] = useState(null);
   const [resolving, setResolving] = useState({});
+  // chat -> lead (docs/wp-groq.md): the latest read of a chat for this lead that still has values waiting for a person, and
+  // whether an accept / dismiss request is running. Loaded with the other side data (payments, issues) in loadSide below.
+  const [chatRun, setChatRun] = useState(null);
+  const [deciding, setDeciding] = useState(false);
 
   const loadSide = useCallback(() => Promise.all([
     api.leadPayments(id).then(setPayments), api.leadIssues(id).then(setIssues),
+    api.leadExtractions(id).then((xs) => setChatRun(xs.find((x) => x.suggestions.some((s) => s.status === 'pending')) ?? null)),
   ]).catch(() => {}), [id]);
   const load = useCallback(() => api.lead(id).then((x) => { setD(x); setError(null); }).catch((e) => setError(e.message)), [id]);
   useEffect(() => { setD(null); setBlockers(null); setLost(null); setNewItem(null); setPay(null); setIssue(null); load(); loadSide(); }, [load, loadSide]);
@@ -103,6 +109,16 @@ export default function LeadDrawer({ id, onClose, onChanged }) {
   const markReceived = async (p) => {
     const ref = window.prompt('Transaction reference (optional)') ?? undefined;
     try { await api.updatePayment(p.id, { status: 'received', transaction_ref: ref || undefined }); await loadSide(); await after(null, 'Marked received'); } catch (e) { say(e.message); }
+  };
+  // Accept / dismiss values the model proposed from a chat. Accepting goes through the normal lead edit on the server, so the
+  // lead is reloaded afterwards (after() also refreshes the history and the boards behind the drawer). A suggestion that can no
+  // longer be applied is reported in the toast and shown as failed in the list.
+  const decideChat = async (action, ids) => {
+    setDeciding(true);
+    try {
+      const r = await (action === 'accept' ? api.acceptExtraction : api.dismissExtraction)(chatRun.id, ids);
+      await loadSide(); await after(null,action === 'accept' ? `${plural(r.applied, 'value')} saved from the chat${r.failed ? `, ${r.failed} could not be applied` : ''}` : 'Dismissed');
+    } catch (e) { say(e.message); } finally { setDeciding(false); }
   };
   const saveIssue = async () => {
     try { await api.addIssue(id, { type: issue.type, title: issue.title, item_id: issue.item_id || null }); setIssue(null); await loadSide(); await after(null, 'Issue opened'); } catch (e) { say(e.message); }
@@ -174,6 +190,14 @@ export default function LeadDrawer({ id, onClose, onChanged }) {
                   {d.gaps.map((g) => <span key={g.field + (g.item_id || '')} className={`chip ${g.level === 'blocking' ? 'red' : 'amb'}`} title={g.hint}>{g.level === 'blocking' && <Icon name="lock" small />}{g.item_label ? `${g.item_label}: ` : ''}{g.label}</span>)}
                 </div>
               )}
+            </section>
+          )}
+
+          {/* values the model proposed from a WhatsApp chat, waiting for a person (only on open leads: a Won or Lost lead is read-only) */}
+          {open && chatRun && (
+            <section className="dsec">
+              <div className="lbl">Suggested from the chat · waiting for you</div>
+              <Suggestions run={chatRun} items={d.items} busy={deciding} onDecide={decideChat} />
             </section>
           )}
 

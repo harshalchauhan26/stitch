@@ -5,6 +5,7 @@ import { errorHandler, notFound } from './lib/errors.js';
 import { authRouter, requireAuth } from './routes/auth.js';
 import { clientsRouter } from './routes/clients.js';
 import { conversationsRouter } from './routes/conversations.js';
+import { extractionRouter } from './routes/extraction.js';
 import { fulfilmentRouter } from './routes/fulfilment.js';
 import { integrationsRouter } from './routes/integrations.js';
 import { leadsRouter } from './routes/leads.js';
@@ -26,12 +27,13 @@ export function createApp(config) {
   });
   api.use(authRouter);
   api.use(requireAuth);
-  api.use(orgRouter);
+  api.use(orgRouter); 
   api.use(settingsRouter);
   api.use(clientsRouter);
   api.use(leadsRouter);
   api.use(ordersRouter);
   api.use(conversationsRouter);
+  api.use(extractionRouter);                         // chat -> suggestions, behind the same login as everything else
   api.use(fulfilmentRouter);
   api.use(integrationsRouter);
   api.use((_req, _res, next) => next(notFound('Endpoint')));

@@ -51,7 +51,8 @@ Free tier: the service sleeps when idle (first request is slow) and webhook retr
 | Clients | `/clients`, `/clients/:id` |
 | Leads | `/leads`, `/leads/:id` (PATCH with version), `/items`, `/stage`, `/lost`, `/reopen`, `/events`, `/undo/:eventId`, `/payments`, `/issues`, `/conversations` |
 | To-do | `/gaps` |
-| Chats | `/conversations` (upload), `/conversations/:id` (+ `/suggestions`, `/links`) |
+| Chats | `/conversations` (upload), `/conversations/:id` (+ `/suggestions`, `/links`, `/extract`, `/extractions`) |
+| Chat suggestions | `/leads/:id/extractions`, `/extractions/:id/accept`, `/extractions/:id/dismiss` (see [docs/EXTRACTION_FLOW.md](../docs/EXTRACTION_FLOW.md)) |
 | Orders | `/orders`, `/orders/:id` (PATCH), `/stage`, `/events`, `/payments`, `/items/:itemId/customisations`, `/dispatches` |
 | Fulfilment | `/customisations/:id/sign-off`, `/customisations/:id/approve`, `/dispatches`, `/dispatches/weekly?week=2026-W43`, `/payments` |
 | Brand webhooks | `/products`, `/brands/:id/webhooks`, `/webhooks/:id` (+ `/test`, `/deliveries`), `/outbox` (+ `/redeliver`), `/notifications` |

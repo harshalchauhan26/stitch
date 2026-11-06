@@ -37,8 +37,12 @@ function requireVersion(body) {
   return int(body?.version, 'version', { required: true, min: 1 });
 }
 
-/** A field the caller may set on this brand's leads: known, visible for the brand, not computed by Stitch. */
-function writableDef(rb, key, scope) {
+/**
+ * A field the caller may set on this brand's leads: known, visible for the brand, not computed by Stitch.
+ * Exported so chat extraction (services/extraction.js) applies exactly the same gate to what the model proposes as a manual edit
+ * gets: the model can never set a field a person could not.
+ */
+export function writableDef(rb, key, scope) {
   const def = rb.defs.get(key);
   if (!def || !def.record_types.includes('lead')) throw badRequest(`Field "${key}" does not exist`);
   if (def.scope !== scope) throw badRequest(`"${key}" is a ${def.scope} field, not a ${scope} field`);
