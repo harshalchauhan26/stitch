@@ -63,6 +63,7 @@ export default function AddLead() {
       <div style={{ maxWidth: 780, display: 'flex', flexDirection: 'column', gap: 18 }}>
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12 }}>
           <div style={{ flexGrow: 1 }}><h1 className="ttl">Add a lead</h1><span style={{ color: 'var(--ink2)' }}>Type in what the customer said on WhatsApp. Anything you leave out shows up as a gap to follow up.</span></div>
+          <Link className="btn" to="/chats"><Icon name="chat" />Start from a WhatsApp chat</Link>
           <Link className="btn gh" to="/leads">Cancel</Link>
         </div>
 

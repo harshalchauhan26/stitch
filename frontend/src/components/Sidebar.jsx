@@ -17,6 +17,7 @@ export default function Sidebar() {
         <NavLink to="/leads" className={link}><Icon name="leads" />Leads<span className="m mut" style={{ marginLeft: 'auto', fontSize: 11 }}>{summary.leads}</span></NavLink>
         <NavLink to="/orders" className={link}><Icon name="orders" />Orders<span className="m mut" style={{ marginLeft: 'auto', fontSize: 11 }}>{summary.orders}</span></NavLink>
         <NavLink to="/gaps" className={link}><Icon name="gaps" />Gaps<span className="chip amb m" style={{ marginLeft: 'auto', height: 18 }}>{summary.gaps}</span></NavLink>
+        <NavLink to="/chats" className={link}><Icon name="chat" />Chats</NavLink>
         <NavLink to="/dispatches" className={link}><Icon name="truck" />Dispatches</NavLink>
       </nav>
       <div style={{ flexGrow: 1 }} />

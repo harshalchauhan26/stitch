@@ -74,6 +74,18 @@ export default {
   updateDispatch: (id, body) => req('PATCH', `/dispatches/${id}`, body),
   weekly: (q) => req('GET', `/dispatches/weekly${qs(q)}`),
 
+  // chats -> leads (docs/wp-groq.md): upload an export, let the model read it, accept or dismiss what it proposed
+  clients: (q) => req('GET', `/clients${qs(q)}`),                                 // the Chats list shows the customer's name and number
+  conversations: (q) => req('GET', `/conversations${qs(q)}`),                     // stored chats the caller can see
+  conversation: (id, q) => req('GET', `/conversations/${id}${qs(q)}`),           // one chat with its first messages (q.limit)
+  uploadChat: (body) => req('POST', '/conversations', body),                      // { whatsapp_account_id, file_name, text, client_phone?, client_name? }
+  chatLeads: (id) => req('GET', `/conversations/${id}/suggestions`),              // the customer's open leads with this brand: what the chat could fill
+  extract: (id, body) => req('POST', `/conversations/${id}/extract`, body),       // { lead_id } or { create_lead: true, owner_id?, confirm_new_purchase? }
+  chatExtractions: (id) => req('GET', `/conversations/${id}/extractions`),        // earlier reads of this chat, latest first
+  leadExtractions: (id) => req('GET', `/leads/${id}/extractions`),                // earlier reads for this lead (the drawer shows the one with pending values)
+  acceptExtraction: (id, ids) => req('POST', `/extractions/${id}/accept`, { suggestion_ids: ids }),    // ids omitted = all pending
+  dismissExtraction: (id, ids) => req('POST', `/extractions/${id}/dismiss`, { suggestion_ids: ids }),
+
   notifications: (q) => req('GET', `/notifications${qs(q)}`),
   readAll: () => req('POST', '/notifications/read-all', {}),
 };
