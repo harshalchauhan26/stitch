@@ -85,7 +85,8 @@ settingsRouter.put('/brands/:id/rules', async (req, res) => {
 settingsRouter.get('/brands/:id/pipeline', async (req, res) => res.json((await brandFields(req.scope, id(req.params.id))).pipeline));
 settingsRouter.put('/brands/:id/pipeline', async (req, res) => {
   requireRole(req.scope, 'admin', 'pod_lead');
-  const stages = await updatePipeline(req.scope, id(req.params.id), req.body?.stages);
+  // body: { stages, move_leads_to? }. move_leads_to = an open stage of the new pipeline; the leads of any removed stage go there.
+  const stages = await updatePipeline(req.scope, id(req.params.id), req.body?.stages, req.body?.move_leads_to);
   await recountLeads(req.scope.tenantId, { brand_id: id(req.params.id) });
   res.json(stages);
 });

@@ -3,7 +3,7 @@ import { NavLink, Navigate, useParams, useSearchParams } from 'react-router-dom'
 import Icon from '../lib/Icon.jsx';
 import { api } from '../api/index.js';
 import { useApp } from '../context/AppContext.jsx';
-import { phone, ROLE_LABEL } from '../lib/format.js';
+import { phone, plural, ROLE_LABEL } from '../lib/format.js';
 
 const TYPES = [['text', 'Text'], ['longtext', 'Long text'], ['number', 'Number'], ['currency', 'Amount (₹)'], ['date', 'Date'], ['select', 'Dropdown'], ['bool', 'Yes / No'], ['url', 'Link']];
 const DEFAULT_PIPELINE = [['New', 'open'], ['Qualifying', 'open'], ['Customising', 'open'], ['Quoted', 'open'], ['Awaiting payment', 'open'], ['Won', 'won'], ['Lost', 'lost']];
@@ -61,6 +61,9 @@ function BrandSetup({ brand, onSaved }) {
   const [data, setData] = useState(null);
   const [stages, setStages] = useState(null);
   const [nf, setNf] = useState(null);
+  // Set when the API says a removed stage still has leads: { busy: [{ stage, leads }], to: the stage chosen to take them }.
+  // While it is set, a small box asks where to move those leads before the save is tried again.
+  const [moving, setMoving] = useState(null);
   const [add, setAdd] = useState({ key: '', stage: '', level: 'optional' });
   const admin = user?.role === 'admin';
   const load = useCallback(() => api.brandFields(brand.id).then((d) => { setData(d); setStages(d.pipeline.map((s) => ({ ...s, orig: s.name }))); }).catch((e) => say(e.message)), [brand.id, say]);
@@ -69,11 +72,16 @@ function BrandSetup({ brand, onSaved }) {
   const open = data.pipeline.filter((s) => s.type === 'open').map((s) => s.name);
   const dirty = JSON.stringify(stages.map(({ name, type }) => ({ name, type }))) !== JSON.stringify(data.pipeline);
 
-  const savePipeline = async () => {
+  // moveTo (optional) = the stage that takes the leads of a removed stage. Without it, a removed stage that still has leads is refused
+  // by the API (code 'stage_not_empty'); that refusal is what opens the "move the leads" box below instead of just showing an error.
+  const savePipeline = async (moveTo) => {
     try {
-      await api.savePipeline(brand.id, stages.map((s) => ({ name: s.name.trim(), type: s.type, ...(s.type === 'open' && s.orig && s.orig !== s.name.trim() ? { from: s.orig } : {}) })));
-      say('Pipeline saved'); await load(); await reloadMe(); onSaved?.();
-    } catch (e) { say(e.message); }
+      await api.savePipeline(brand.id, stages.map((s) => ({ name: s.name.trim(), type: s.type, ...(s.type === 'open' && s.orig && s.orig !== s.name.trim() ? { from: s.orig } : {}) })), moveTo);
+      setMoving(null); say(moveTo ? `Pipeline saved, leads moved to ${moveTo}` : 'Pipeline saved'); await load(); await reloadMe(); onSaved?.();
+    } catch (e) {
+      if (e.code === 'stage_not_empty') { setMoving({ busy: e.stages, to: '' }); return; }
+      say(e.message);
+    }
   };
   const update = async (key, body, msg) => { try { const d = await api.updateBrandField(brand.id, key, body); setData(d); say(msg); } catch (e) { say(e.message); } };
   const createField = async () => {
@@ -89,7 +97,21 @@ function BrandSetup({ brand, onSaved }) {
         <div className="lbl">{brand.name} · stages</div>
         <span className="mut" style={{ fontSize: 12 }}>The steps this brand's leads go through, in order. Rename, add, move up or down, or remove a stage, then <b>Save stages</b>. Renaming keeps the leads in it; a stage that still has leads cannot be removed. The won stage creates the order. Orders use the same stages for every brand.</span>
         <PipelineEditor stages={stages} onChange={setStages} />
-        {dirty && <div style={{ display: 'flex', gap: 8 }}><button type="button" className="btn pri" onClick={savePipeline}>Save stages</button><button type="button" className="btn gh" onClick={load}>Undo changes</button></div>}
+        {dirty && <div style={{ display: 'flex', gap: 8 }}><button type="button" className="btn pri" onClick={() => savePipeline()}>Save stages</button><button type="button" className="btn gh" onClick={() => { setMoving(null); load(); }}>Undo changes</button></div>}
+        {/* a removed stage still has leads: pick an open stage of the new list to take them (won and lost stages are not offered) */}
+        {moving && (
+          <div className="chip amb" style={{ height: 'auto', padding: 12, whiteSpace: 'normal', flexDirection: 'column', alignItems: 'flex-start', gap: 8 }}>
+            <span>{moving.busy.map((b) => `${plural(b.leads, 'lead')} in "${b.stage}"`).join(', ')} would be left without a stage. Move them to:</span>
+            <span style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <select className="inp" aria-label="Move leads to" value={moving.to} onChange={(e) => setMoving({ ...moving, to: e.target.value })}>
+                <option value="">Choose a stage…</option>
+                {stages.filter((s) => s.type === 'open' && s.name.trim()).map((s) => <option key={s.name} value={s.name.trim()}>{s.name.trim()}</option>)}
+              </select>
+              <button type="button" className="btn pri" disabled={!moving.to} onClick={() => savePipeline(moving.to)}>Move leads and save</button>
+              <button type="button" className="btn gh" onClick={() => setMoving(null)}>Cancel</button>
+            </span>
+          </div>
+        )}
       </section>
 
       <section className="tbl" style={box}>

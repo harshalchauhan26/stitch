@@ -159,3 +159,73 @@ describe('Yes/No field answered "No"', () => {
     assert.ok(gap(), 'clearing the answer brings the gap back');
   });
 });
+
+describe('removing a stage that still has leads: move them', () => {
+  const lead = async (brandId, phone, stage) => {
+    let l = ok(await t.api('POST', '/leads', { brand_id: brandId, client: { phone } }, o.tokens.priya), 201);
+    if (stage) l = ok(await t.api('POST', `/leads/${l.id}/stage`, { version: l.version, to: stage }, o.tokens.priya));
+    return l;
+  };
+  const get = async (l) => ok(await t.api('GET', `/leads/${l.id}`, undefined, o.tokens.priya));
+  const put = (brandId, body, token = o.admin) => t.api('PUT', `/brands/${brandId}/pipeline`, body, token);
+  const open = (...names) => names.map((name) => ({ name, type: 'open' }));
+  const ends = [{ name: 'Won', type: 'won' }, { name: 'Lost', type: 'lost' }];
+  let mh, leadInB, leadInA;                                             // set by the first test, used by the next ones
+
+  test('without a target the stage is still refused; wrong targets are refused too and nothing changes', async () => {
+    mh = ok(await t.api('POST', '/brands', { name: 'Move House', code: 'MH', template_key: 'womenswear', team_ids: [o.alpha.id], lead_pipeline: [...open('A', 'B', 'C'), ...ends] }, o.admin), 201);
+    const inB = await lead(mh.id, '+91 97000 10001', 'B');
+    const without = [...open('A', 'C'), ...ends];                       // B removed
+    const refused = await put(mh.id, { stages: without });
+    assert.equal(refused.status, 409);
+    assert.equal(refused.body.code, 'stage_not_empty');
+    assert.deepEqual(refused.body.stages, [{ stage: 'B', leads: 1 }]);
+    for (const [to, why] of [['B', 'the stage being removed'], ['Won', 'a won stage'], ['Lost', 'a lost stage'], ['Nowhere', 'a stage that does not exist']]) {
+      const r = await put(mh.id, { stages: without, move_leads_to: to });
+      assert.equal(r.status, 400, why);
+    }
+    assert.equal((await get(inB)).stage, 'B', 'a refused save moves nobody');
+    assert.equal((await put(mh.id, { stages: without, move_leads_to: 'C' }, o.tokens.priya)).status, 403, 'sales cannot change the pipeline');
+    leadInB = inB;
+  });
+
+  test('the leads move in one go, each with its own "system" history entry, and the counts are recounted', async () => {
+    const inB2 = await lead(mh.id, '+91 97000 10002', 'B');
+    const inA = await lead(mh.id, '+91 97000 10003');
+    const inC = await lead(mh.id, '+91 97000 10004', 'C');
+    const lostFromB = await lead(mh.id, '+91 97000 10005', 'B');
+    ok(await t.api('POST', `/leads/${lostFromB.id}/lost`, { version: (await get(lostFromB)).version, reason: 'Price' }, o.tokens.priya));
+    ok(await put(mh.id, { stages: [...open('A', 'C'), ...ends], move_leads_to: 'C' }));
+
+    for (const l of [leadInB, inB2]) {
+      const now = await get(l);
+      assert.equal(now.stage, 'C');
+      const ev = ok(await t.api('GET', `/leads/${l.id}/events`, undefined, o.tokens.priya))[0];
+      assert.deepEqual([ev.type, ev.source], ['stage.moved', 'system']);
+      assert.deepEqual(ev.changes.map((c) => [c.field, c.old, c.new]), [['stage', 'B', 'C']]);
+      assert.match(ev.reason, /Stage "B" was removed/);
+      assert.equal(ev.actor.name, 'Admin', 'the person who saved the pipeline');
+    }
+    assert.equal((await get(inA)).stage, 'A', 'leads of kept stages stay');
+    assert.equal((await get(inC)).stage, 'C');
+    // the numbers on the lead list match the live gaps (they were recounted for the new stage)
+    const rows = ok(await t.api('GET', `/leads?brand=${mh.id}`, undefined, o.tokens.priya)).leads;
+    for (const l of [leadInB, inB2]) assert.equal(rows.find((r) => r.id === l.id).open_gap_count, (await get(l)).gaps.length);
+    // a lost lead that would have reopened in B now reopens in C
+    const reopened = ok(await t.api('POST', `/leads/${lostFromB.id}/reopen`, { version: (await get(lostFromB)).version }, o.tokens.priya));
+    assert.equal(reopened.stage, 'C');
+    const rules = ok(await t.api('GET', `/brands/${mh.id}/rules`, undefined, o.admin));
+    assert.ok(rules.every((r) => r.record_type !== 'lead' || ['A', 'C'].includes(r.stage)), 'no rule is left on the removed stage');
+    leadInA = inA;
+  });
+
+  test('the target can be a stage that is renamed in the same save', async () => {
+    // pipeline is now A, C. Remove A (it has a lead) and rename C to Finish; the lead from A goes to Finish
+    ok(await put(mh.id, { stages: [{ name: 'Finish', type: 'open', from: 'C' }, ...ends], move_leads_to: 'Finish' }));
+    assert.equal((await get(leadInA)).stage, 'Finish');
+    assert.equal((await get(leadInB)).stage, 'Finish');
+    const audit = (await import('../src/models/index.js')).AuditLog;
+    const log = await audit.findOne({ target_id: mh.id, action: 'pipeline.changed' }).sort({ at: -1 }).lean();
+    assert.deepEqual(log.data.moved, { to: 'Finish', from: [{ stage: 'A', leads: 1 }] }, 'the move is noted in the settings log');
+  });
+});

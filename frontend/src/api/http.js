@@ -32,7 +32,8 @@ export default {
   brandFields: (id) => req('GET', `/brands/${id}/fields`),
   addBrandField: (id, body) => req('POST', `/brands/${id}/fields`, body),
   updateBrandField: (id, key, body) => req('PATCH', `/brands/${id}/fields/${key}`, body),
-  savePipeline: (id, stages) => req('PUT', `/brands/${id}/pipeline`, { stages }),
+  // moveLeadsTo (optional): where the leads of a removed stage go. Left out, a removed stage that still has leads is refused.
+  savePipeline: (id, stages, moveLeadsTo) => req('PUT', `/brands/${id}/pipeline`, { stages, move_leads_to: moveLeadsTo }),
   teams: () => req('GET', '/teams'),
   createTeam: (body) => req('POST', '/teams', body),
   updateTeam: (id, body) => req('PATCH', `/teams/${id}`, body),
