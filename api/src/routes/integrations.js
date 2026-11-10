@@ -4,6 +4,7 @@ import { Router } from 'express';
 import { badRequest, conflict, notFound } from '../lib/errors.js';
 import { bool, id, int, str } from '../lib/validate.js';
 import { Brand, FieldDef, Notification, Outbox, Product, WebhookDelivery, WebhookEndpoint } from '../models/index.js';
+import { syncProducts } from '../services/productSync.js';
 import { pingEndpoint } from '../services/webhooks.js';
 import { requireBrand, requireRole } from '../services/scope.js';
 
@@ -13,6 +14,7 @@ export const integrationsRouter = Router();
 const productDto = (p) => ({
   id: p._id, brand_id: p.brand_id, sku: p.sku, name: p.name, category: p.category, base_price: p.base_price, currency: p.currency,
   customisable_fields: p.customisable_fields, lead_time_days: p.lead_time_days, images: p.images, active: p.active,
+  shopify: !!p.shopify_product_id,                       // true = comes from Shopify (the screen shows it read-only)
 });
 
 async function productInput(tenantId, body, partial) {
@@ -58,11 +60,24 @@ integrationsRouter.patch('/products/:id', async (req, res) => {
   const p = await Product.findOne({ _id: id(req.params.id), tenant_id: req.scope.tenantId });
   if (!p || !req.scope.canSeeBrand(p.brand_id)) throw notFound('Product');
   const input = await productInput(req.scope.tenantId, req.body, true);
+  // A product that comes from Shopify is owned by Shopify: the next sync would overwrite these fields (and switch it back on),
+  // so they cannot be edited here. Stitch's own details (lead time, customisable fields) can still be changed.
+  if (p.shopify_product_id && (['sku', 'name', 'category', 'base_price', 'images'].some((k) => k in input) || req.body.active !== undefined)) {
+    throw conflict('This product comes from Shopify, so its name, SKU, price and status are changed in Shopify and picked up by the next sync', { code: 'shopify_managed' });
+  }
   if (input.sku && input.sku !== p.sku && await Product.exists({ tenant_id: req.scope.tenantId, brand_id: p.brand_id, sku: input.sku })) throw conflict(`SKU ${input.sku} already exists`, { code: 'duplicate_sku' });
   Object.assign(p, input);
   if (req.body.active !== undefined) p.active = bool(req.body.active, 'active');
   await p.save();
   res.json(productDto(p));
+});
+
+// Pull the brand's active products from its Shopify store into the catalogue (services/productSync.js).
+// Admins and pod leads. Answers { created, updated, unchanged, deactivated, exceptions }; 503 shopify_not_connected until the brand's
+// SHOPIFY_<CODE>_DOMAIN and SHOPIFY_<CODE>_TOKEN are set in api/.env.
+integrationsRouter.post('/brands/:id/products/sync', async (req, res) => {
+  requireRole(req.scope, 'admin', 'pod_lead');
+  res.json(await syncProducts(req.scope, id(req.params.id)));
 });
 
 // ---------- webhooks (admin) ----------

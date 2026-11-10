@@ -6,6 +6,7 @@ import AddLead from './pages/AddLead.jsx';
 import Leads from './pages/Leads.jsx';
 import Orders from './pages/Orders.jsx';
 import Chats from './pages/Chats.jsx';
+import Products from './pages/Products.jsx';
 import Dispatches from './pages/Dispatches.jsx';
 import Settings from './pages/Settings.jsx';
 import Login from './pages/Login.jsx';
@@ -28,6 +29,7 @@ export default function App() {
         {/* chat -> lead: upload a WhatsApp export and review what the model filled; /chats/:id opens one chat */}
         <Route path="/chats" element={<Chats />} />
         <Route path="/chats/:id" element={<Chats />} />
+        <Route path="/products" element={<Products />} />
         <Route path="/dispatches" element={<Dispatches />} />
         <Route path="/settings" element={<Navigate to="/settings/brands" replace />} />
         <Route path="/settings/:tab" element={<Settings />} />

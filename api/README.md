@@ -55,7 +55,8 @@ Free tier: the service sleeps when idle (first request is slow) and webhook retr
 | Chat suggestions | `/leads/:id/extractions`, `/extractions/:id/accept`, `/extractions/:id/dismiss` (see [docs/EXTRACTION_FLOW.md](../docs/EXTRACTION_FLOW.md)) |
 | Orders | `/orders`, `/orders/:id` (PATCH), `/stage`, `/events`, `/payments`, `/items/:itemId/customisations`, `/dispatches` |
 | Fulfilment | `/customisations/:id/sign-off`, `/customisations/:id/approve`, `/dispatches`, `/dispatches/weekly?week=2026-W43`, `/payments` |
-| Brand webhooks | `/products`, `/brands/:id/webhooks`, `/webhooks/:id` (+ `/test`, `/deliveries`), `/outbox` (+ `/redeliver`), `/notifications` |
+| Products | `/products` (list, add, edit), `/brands/:id/products/sync` (pull a brand's active products from its Shopify store) |
+| Brand webhooks | `/brands/:id/webhooks`, `/webhooks/:id` (+ `/test`, `/deliveries`), `/outbox` (+ `/redeliver`), `/notifications` |
 
 ### Brand webhook
 

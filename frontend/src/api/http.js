@@ -40,7 +40,12 @@ export default {
   users: () => req('GET', '/users'),
   createUser: (body) => req('POST', '/users', body),
   updateUser: (id, body) => req('PATCH', `/users/${id}`, body),
-  products: (brand) => req('GET', `/products${qs({ brand })}`),
+  products: (brand) => req('GET', `/products${qs({ brand })}`),                  // active products of a brand, for the pickers
+  // the Products page: q = search text, active: 'all' also lists the switched-off ones
+  productList: (q) => req('GET', `/products${qs(q)}`),
+  createProduct: (body) => req('POST', '/products', body),                       // { brand_id, sku, name, category?, base_price (paise)?, lead_time_days? }
+  updateProduct: (id, body) => req('PATCH', `/products/${id}`, body),
+  syncProducts: (brandId) => req('POST', `/brands/${brandId}/products/sync`, {}), // pull the brand's active products from its Shopify store
 
   // leads
   leads: (q) => req('GET', `/leads${qs(q)}`),
