@@ -283,14 +283,15 @@ export function validateOutput(out, ctx) {
  */
 export function coverage(fill, { rb, client, lead, keys }) {
   const rows = [];
-  const mark = (def, item) => {
+  // level is the rule's level for the field; it decides whether a Yes/No "No" counts as filled (same rule as the gap engine)
+  const mark = (def, item, level) => {
     const ctx = { client, lead, item };
     if (!conditionHolds(def.applies_when, rb.defs, ctx)) return;
-    const state = keys.has(`${def.scope}|${def.key}|${item?._id ?? ''}`) ? 'suggested' : isFilled(def, valueOf(def, ctx)) ? 'filled' : 'not_found';
+    const state = keys.has(`${def.scope}|${def.key}|${item?._id ?? ''}`) ? 'suggested' : isFilled(def, valueOf(def, ctx), level) ? 'filled' : 'not_found';
     rows.push({ field: def.key, label: def.label, item_id: item?._id ?? null, state });
   };
-  for (const { def } of fill.values()) {
-    if (def.scope === 'item') activeItems(lead).forEach((i) => mark(def, i)); else mark(def, null);
+  for (const { def, level } of fill.values()) {
+    if (def.scope === 'item') activeItems(lead).forEach((i) => mark(def, i, level)); else mark(def, null, level);
   }
   return rows;
 }

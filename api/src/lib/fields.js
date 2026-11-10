@@ -1,5 +1,5 @@
 // Field values: parse what a person typed (PLAN §12), read a value from the right document, and decide "filled".
-import { CLIENT_PATHS, ITEM_PATHS, ORDER_PATHS } from '../catalogue.js';
+import { CLIENT_PATHS, GATE_FIELDS, ITEM_PATHS, ORDER_PATHS } from '../catalogue.js';
 import { badRequest } from './errors.js';
 import { parsePhone } from './normalise.js';
 import { isoDate } from './validate.js';
@@ -78,9 +78,21 @@ export function valueOf(def, ctx) {
   }
 }
 
-export function isFilled(def, v) {
+// Is this Yes/No field a "gate"? For a gate, "No" means "not done yet", so it must stay a gap until it is "Yes".
+// A field is a gate when any one of these is true:
+//   - it is one of the six gate fields (customer approval, address confirmed ...)
+//   - Stitch fills it in by itself (customer sign off, payment link sent ...): its "No" is a real "not yet"
+//   - it has its own blocks_move_to (it holds back a particular stage)
+//   - the brand marked it Blocking in Set Required (level 'blocking')
+// Any other Yes/No field (for example a brand's own "Fabric swatches sent") is only information, so "No" is a valid answer.
+const isGate = (def, level) => def.computed || !!def.blocks_move_to || level === 'blocking' || GATE_FIELDS.includes(def.key);
+
+// level = the rule's level for this field ('optional' | 'needed' | 'blocking'). It is optional: when it is not given,
+// the field is still treated as a gate if it is a gate by its own definition (the checks above).
+export function isFilled(def, v, level) {
   if (def.done_values?.length) return def.done_values.includes(v);
-  if (def.type === 'bool') return v === 'Yes';
+  // Yes/No: "Yes" is always filled. "No" is filled too, unless the field is a gate (then it is still a gap).
+  if (def.type === 'bool') return v === 'Yes' || (v === 'No' && !isGate(def, level));
   if (def.type === 'paid') return v === 'Paid';
   return !empty(v);
 }

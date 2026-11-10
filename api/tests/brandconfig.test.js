@@ -144,3 +144,18 @@ describe('switching fields between optional and needed', () => {
     assert.equal((await t.api('PATCH', `/brands/${o.na.id}/fields/padding`, { level: 'blocking' }, o.admin)).status, 400);
   });
 });
+
+describe('Yes/No field answered "No"', () => {
+  test('a brand\'s own Yes/No field: empty is a gap, "No" and "Yes" are both answers', async () => {
+    ok(await t.api('POST', `/brands/${o.na.id}/fields`, { label: 'Fabric swatches sent', type: 'bool', scope: 'lead', stage: 'New', level: 'needed' }, o.admin), 201);
+    let lead = ok(await t.api('POST', '/leads', { brand_id: o.na.id, client: { phone: '+91 96000 10001' }, items: [{ product: 'Lehenga' }] }, o.tokens.priya), 201);
+    const gap = () => lead.gaps.some((g) => g.field === 'fabric_swatches_sent');
+    assert.ok(gap(), 'nobody has answered yet');
+    for (const answer of ['No', 'Yes']) {
+      lead = ok(await t.api('PATCH', `/leads/${lead.id}`, { version: lead.version, fields: { fabric_swatches_sent: answer } }, o.tokens.priya));
+      assert.ok(!gap(), `${answer} is an answer`);
+    }
+    lead = ok(await t.api('PATCH', `/leads/${lead.id}`, { version: lead.version, fields: { fabric_swatches_sent: '' } }, o.tokens.priya));
+    assert.ok(gap(), 'clearing the answer brings the gap back');
+  });
+});
