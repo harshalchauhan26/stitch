@@ -59,6 +59,15 @@ Our dev reports an account where data was lost and the account reset. From Meta'
 - **What stops the sync:** leaving the phone unopened for about 14 days, or reinstalling or moving to a new phone without the "keep connected" option.
 - **Requirements:** WhatsApp Business app 2.24.17 or newer (not normal WhatsApp), and the provider must be a Meta Solution Partner or Tech Provider with Coexistence switched on. Meta's flow starts Coexistence automatically when the number is already on the Business app.
 
+**Follow-up research, 12 Nov 2026:**
+- **No source reports Coexistence deleting chats on the phone.** Meta's page says history "stays in sync between both apps".
+- **Where the "it erases chats" rumour likely comes from:**
+  - Providers without Coexistence support. Intercom, for example, still requires deleting the number from the Business app before connecting.
+  - Providers that never request the history. Whatomate issue #613 (Nov 2026): users started with an empty inbox and had to offboard and onboard again after 24 hours.
+- **Media:** only media from about the 14 days before onboarding comes across.
+- **Embedded Signup:** v2 and v3 were deprecated on 15 Oct 2026, so a provider must be on v4.
+- **Meta One:** a Business app subscription (launched for businesses around Sept 2026). It gives no API access and no chat export. Business Agent's self-serve version has no CRM or API connection either.
+
 **Safety checklist for the pilot:**
 1. Back up chats to Google Drive from the phone and update the app.
 2. Use a low-stakes brand number.
