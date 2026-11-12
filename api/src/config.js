@@ -9,6 +9,7 @@ export function loadConfig(env = process.env) {
     // number of proxies in front (Render: 1). TRUST_PROXY=0 really means none
     trustProxy: env.TRUST_PROXY !== undefined && env.TRUST_PROXY !== '' ? (Number.isFinite(Number(env.TRUST_PROXY)) ? Number(env.TRUST_PROXY) : 1) : (prod ? 1 : 0),
     webhookWorker: env.WEBHOOK_WORKER !== 'off',
+    mailWorker: env.MAIL_WORKER !== 'off',
   };
 }
 

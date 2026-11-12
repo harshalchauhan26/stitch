@@ -4,6 +4,7 @@ import { firstAdmin, loadConfig, productionProblems } from './config.js';
 import { connect } from './db.js';
 import { ensureSchema, Tenant } from './models/index.js';
 import { bootstrap } from './services/bootstrap.js';
+import { startMailWorker } from './services/mail.js';
 import { startWebhookWorker } from './services/webhooks.js';
 
 const config = loadConfig();
@@ -19,4 +20,5 @@ const { created } = await bootstrap(first);
 if (created) console.log(`Created tenant "${first.tenant.name}". Sign in as ${first.email}${config.prod ? '' : ` / ${first.password}`}`);
 
 if (config.webhookWorker) startWebhookWorker();
+if (config.mailWorker) startMailWorker();
 createApp(config).listen(config.port, () => console.log(`Stitch API on http://localhost:${config.port}/api`));

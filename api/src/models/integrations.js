@@ -54,7 +54,29 @@ const NotificationSchema = new Schema({
 }, baseOptions('notifications'));
 NotificationSchema.index({ tenant_id: 1, user_id: 1, read_at: 1, created_at: -1 });
 
+// E-mails to the team (docs/MAILER.md). Written in the same transaction as the change they announce by services/mailFlows.js;
+// the worker in services/mail.js sends them. One row per recipient, so each is retried on its own.
+const MailOutboxSchema = new Schema({
+  tenant_id: tenantRef,
+  brand_id: { type: ObjectId, ref: 'Brand', default: null },
+  type: { type: String, required: true },                     // order.opened, payment.due, customisation.changed, dispatch.created, order.closed...
+  to: { type: String, required: true },
+  user_id: { type: ObjectId, ref: 'User', default: null },
+  subject: { type: String, required: true },
+  body: { type: String, required: true },
+  ref: { type: Mixed, default: {} },                           // what it is about: { order_id, lead_id, label, ... }
+  status: { type: String, enum: ['pending', 'processing', 'sent', 'failed'], default: 'pending' },
+  attempts: { type: Number, default: 0 },
+  next_attempt_at: { type: Date, default: Date.now },
+  locked_until: { type: Date, default: null },
+  sent_at: { type: Date, default: null },
+  last_error: { type: String, default: null },
+}, baseOptions('mail_outbox'));
+MailOutboxSchema.index({ status: 1, next_attempt_at: 1 });
+MailOutboxSchema.index({ tenant_id: 1, created_at: -1 });
+
 export const WebhookEndpoint = mongoose.model('WebhookEndpoint', WebhookEndpointSchema);
 export const Outbox = mongoose.model('Outbox', OutboxSchema);
 export const WebhookDelivery = mongoose.model('WebhookDelivery', WebhookDeliverySchema);
 export const Notification = mongoose.model('Notification', NotificationSchema);
+export const MailOutbox = mongoose.model('MailOutbox', MailOutboxSchema);

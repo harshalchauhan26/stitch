@@ -3,7 +3,7 @@ import crypto from 'node:crypto';
 import { Router } from 'express';
 import { badRequest, conflict, notFound } from '../lib/errors.js';
 import { bool, id, int, str } from '../lib/validate.js';
-import { Brand, FieldDef, Notification, Outbox, Product, WebhookDelivery, WebhookEndpoint } from '../models/index.js';
+import { Brand, FieldDef, MailOutbox, Notification, Outbox, Product, WebhookDelivery, WebhookEndpoint } from '../models/index.js';
 import { syncProducts } from '../services/productSync.js';
 import { pingEndpoint } from '../services/webhooks.js';
 import { requireBrand, requireRole } from '../services/scope.js';
@@ -152,6 +152,26 @@ integrationsRouter.post('/outbox/:id/redeliver', async (req, res) => {
   const { kickWebhooks } = await import('../services/webhooks.js');
   kickWebhooks();
   res.json({ id: o._id, status: o.status });
+});
+
+// ---------- e-mails to the team (admin): what was queued, and Retry for the ones that failed (docs/MAILER.md) ----------
+integrationsRouter.get('/mail', async (req, res) => {
+  requireRole(req.scope, 'admin');
+  const filter = { tenant_id: req.scope.tenantId };
+  if (req.query.status) filter.status = String(req.query.status);
+  if (req.query.type) filter.type = String(req.query.type);
+  const list = await MailOutbox.find(filter).sort({ created_at: -1 }).limit(100).lean();
+  res.json(list.map((m) => ({ id: m._id, type: m.type, to: m.to, subject: m.subject, status: m.status, attempts: m.attempts, next_attempt_at: m.next_attempt_at, sent_at: m.sent_at, last_error: m.last_error, label: m.ref?.label ?? null, created_at: m.created_at })));
+});
+
+integrationsRouter.post('/mail/:id/retry', async (req, res) => {
+  requireRole(req.scope, 'admin');
+  const m = await MailOutbox.findOneAndUpdate({ _id: id(req.params.id), tenant_id: req.scope.tenantId, status: 'failed' },
+    { $set: { status: 'pending', attempts: 0, next_attempt_at: new Date(), last_error: null } }, { returnDocument: 'after' }).lean();
+  if (!m) throw notFound('Failed e-mail');
+  const { kickMail } = await import('../services/mail.js');
+  kickMail();
+  res.json({ id: m._id, status: m.status });
 });
 
 // ---------- notifications ----------

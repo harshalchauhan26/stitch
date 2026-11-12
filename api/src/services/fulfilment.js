@@ -7,6 +7,7 @@ import { parseFieldValue } from '../lib/fields.js';
 import { id, ids, int, isoDate, isoWeek, localToDate, oneOf, str } from '../lib/validate.js';
 import { Brand, Client, Customisation, Dispatch, Order, User } from '../models/index.js';
 import { blockersForMove } from './gaps.js';
+import { mailCustomisation, mailDispatch, mailOrderClosed } from './mailFlows.js';
 import { getOrder, syncOrder } from './orders.js';
 import { loadBrandRules } from './rules.js';
 
@@ -74,9 +75,11 @@ export async function createVersion(scope, orderId, itemId, body = {}) {
       // waits for a pod lead; the current version stays in force
       const { writeEvent } = await import('./events.js');
       await writeEvent(session, scope, 'order', order, { type: 'customisation.proposed', item_id: item._id, changes: changed, reason, data: { customisation_id: doc._id, kind, version: doc.version } });
+      await mailCustomisation(session, { order, item, doc, what: 'proposed', changes: changed, reason, by: scope.user });
       return { customisation: doc, pending_approval: true };
     }
     await makeCurrent(session, scope, order, item, doc, { type: 'customisation.changed', changes: changed, reason, data: { customisation_id: doc._id, kind, version: doc.version } });
+    await mailCustomisation(session, { order, item, doc, what: 'changed', changes: changed, reason, by: scope.user });
     return { customisation: doc, pending_approval: false };
   });
 }
@@ -98,6 +101,7 @@ export async function approveVersion(scope, customisationId) {
     for (const k of doc.changed_fields) { if (doc.values[k] === undefined) delete values[k]; else values[k] = doc.values[k]; }
     await Customisation.updateOne({ _id: doc._id }, { $set: { approved_by: scope.user._id, values } }, { session });
     await makeCurrent(session, scope, order, item, doc, { type: 'customisation.approved', reason: doc.reason, data: { customisation_id: doc._id, kind: doc.kind, version: doc.version, changed_fields: doc.changed_fields } });
+    await mailCustomisation(session, { order, item, doc, what: 'approved', changes: doc.changed_fields.map((k) => ({ field: k, new: values[k] ?? null })), reason: doc.reason, by: scope.user });
     return Customisation.findById(doc._id).session(session).lean();
   });
 }
@@ -116,6 +120,7 @@ export async function signOff(scope, customisationId, body = {}) {
     const evidence = id(body.evidence_message_id, 'evidence_message_id', { required: false });
     await Customisation.updateOne({ _id: doc._id }, { $set: { status: 'signed_off', signed_off: { by_customer: true, confirmed_by_user_id: scope.user._id, at: new Date(), evidence_message_id: evidence } } }, { session });
     await syncOrder(session, scope, order._id, { event: { type: 'measurements.signed_off', item_id: item._id, source_message_id: evidence, data: { customisation_id: doc._id, version: doc.version } } });
+    await mailCustomisation(session, { order, item, doc, what: 'signed_off', by: scope.user });
     return Customisation.findById(doc._id).session(session).lean();
   });
 }
@@ -165,6 +170,7 @@ export async function createDispatch(scope, orderId, body = {}) {
       set: moving ? { stage: 'Dispatched', stage_changed_at: new Date() } : {},
       event: { type: 'dispatch.created', changes: moving ? [{ field: 'stage', scope: 'order', old: order.stage, new: 'Dispatched' }] : [], data: { dispatch_id: d._id, shipment_no: shipmentNo, courier: d.courier, awb: d.awb } },
     });
+    await mailDispatch(session, { order, dispatch: d, what: 'created' });
     return { dispatch: d };
   });
   if (result.blocked) throw new HttpError(422, `Cannot dispatch yet: ${result.blocked.map((g) => g.label).join(', ')} ${result.blocked.length > 1 ? 'are' : 'is'} missing`, { code: 'blocked', blockers: result.blocked });
@@ -225,6 +231,9 @@ export async function updateDispatch(scope, dispatchId, body = {}) {
       event: { type: corrected ? 'dispatch.corrected' : 'dispatch.updated',
         changes: [...changes, ...(deliver ? [{ field: 'stage', scope: 'order', old: 'Dispatched', new: 'Delivered' }] : [])], reason, data: { dispatch_id: d._id, shipment_no: d.shipment_no } },
     });
+    // e-mail the team: the order is closed when this delivery completes it, otherwise the shipment's new status
+    if (deliver) await mailOrderClosed(session, { order, dispatch: d });
+    else if (changes.some((c) => c.field === 'dispatch.status')) await mailDispatch(session, { order, dispatch: d, what: 'status' });
     return d;
   });
 }
