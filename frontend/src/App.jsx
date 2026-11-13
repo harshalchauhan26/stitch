@@ -7,6 +7,7 @@ import Leads from './pages/Leads.jsx';
 import Orders from './pages/Orders.jsx';
 import Chats from './pages/Chats.jsx';
 import Products from './pages/Products.jsx';
+import Mail from './pages/Mail.jsx';
 import Dispatches from './pages/Dispatches.jsx';
 import Settings from './pages/Settings.jsx';
 import Login from './pages/Login.jsx';
@@ -31,6 +32,8 @@ export default function App() {
         <Route path="/chats/:id" element={<Chats />} />
         <Route path="/products" element={<Products />} />
         <Route path="/dispatches" element={<Dispatches />} />
+        {/* admins only: the page sends anyone else back to Home, and the API refuses them too */}
+        <Route path="/mail" element={<Mail />} />
         <Route path="/settings" element={<Navigate to="/settings/brands" replace />} />
         <Route path="/settings/:tab" element={<Settings />} />
         <Route path="*" element={<Navigate to="/" replace />} />

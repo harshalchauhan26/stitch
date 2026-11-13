@@ -23,6 +23,8 @@ export default function Sidebar() {
       </nav>
       <div style={{ flexGrow: 1 }} />
       <nav className="nav" aria-label="Admin">
+        {/* E-mails is for admins only, so the link is not drawn for anyone else */}
+        {user?.role === 'admin' && <NavLink to="/mail" className={link}><Icon name="mail" />E-mails</NavLink>}
         <NavLink to="/settings" className={link}><Icon name="settings" />Settings</NavLink>
       </nav>
       <div className="hl" style={{ padding: '12px 10px 0', display: 'flex', alignItems: 'center', gap: 10 }}>

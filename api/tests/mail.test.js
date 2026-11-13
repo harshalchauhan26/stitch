@@ -127,12 +127,19 @@ describe('mail worker: retries and the admin view', () => {
     assert.equal(m.status, 'failed');
     assert.equal(m.attempts, MAX_ATTEMPTS);
     assert.equal(await Notification.countDocuments({ type: 'mail.failed' }), 1);
+    assert.equal((await Notification.findOne({ type: 'mail.failed' }).lean()).link, '/mail?status=failed', 'the notification opens the E-mails screen');
   });
 
   test('only an admin sees the mail list; Retry sends a failed mail again', async () => {
     assert.equal((await t.api('GET', '/mail', undefined, o.tokens.priya)).status, 403);
     const failed = ok(await t.api('GET', '/mail?status=failed', undefined, o.admin));
     assert.deepEqual(failed.map((m) => [m.to, m.subject, m.attempts]), [['nobody@stitch.test', 'Hello', MAX_ATTEMPTS]]);
+    assert.equal(failed[0].body, 'Body', 'the list carries the text that was sent');
+    assert.equal(failed[0].last_error, 'smtp down');
+    // the filters the screen uses: by status and by type; another role is refused for both
+    assert.ok(ok(await t.api('GET', '/mail?status=sent', undefined, o.admin)).every((m) => m.status === 'sent'));
+    assert.ok(ok(await t.api('GET', '/mail?type=order.opened', undefined, o.admin)).every((m) => m.type === 'order.opened'));
+    assert.equal((await t.api('GET', '/mail', undefined, o.tokens.meera)).status, 403, 'a pod lead cannot see the mail list either');
     assert.equal((await t.api('POST', `/mail/${failedId}/retry`, {}, o.tokens.priya)).status, 403);
     assert.equal(ok(await t.api('POST', `/mail/${failedId}/retry`, {}, o.admin)).status, 'pending');
     setMailTransport(collect);

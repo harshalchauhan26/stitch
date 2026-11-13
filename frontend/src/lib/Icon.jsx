@@ -5,6 +5,8 @@ const P = {
   orders: <><path d="M3 6.5 10 3l7 3.5v7L10 17l-7-3.5z" /><path d="M3 6.5 10 10l7-3.5M10 10v7" /></>,
   // speech bubble with two lines, for Chats (the plain "leads" icon is the empty bubble)
   chat: <><path d="M4 4h12v9H9l-4 3v-3H4z" /><path d="M7 7.5h6M7 10h4" /></>,
+  // envelope, for the E-mails screen
+  mail: <><rect x="3" y="5" width="14" height="10" rx="1.5" /><path d="m3.5 6 6.5 5 6.5-5" /></>,
   // price tag, for Products
   tag: <><path d="M3 3h7l7 7-7 7-7-7z" /><circle cx="7" cy="7" r="1.2" /></>,
   gaps: <><circle cx="10" cy="10" r="7" /><path d="M10 6.5v4.5M10 13.5v.01" /></>,

@@ -48,11 +48,26 @@ server never slows or breaks a save.
 To send real mail, pick any provider with SMTP, run `npm install nodemailer` once in `api/`, and set the variables above.
 Until then everything works in dry run.
 
-## For admins
+## For admins: the E-mails screen
+
+**E-mails** in the sidebar (admins only) lists the last 100 mails: when, to whom, the subject, which order or lead it is
+about, and whether it is waiting, sent or failed.
+
+- Filter by status (All, Failed, Waiting, Sent) and by kind of mail. The filters are in the address, e.g. `/mail?status=failed`.
+- Click a row to read the exact text that was sent.
+- A failed mail shows why it failed and how many times it was tried, with a **Retry** button that queues it again and
+  sends it straight away.
+- A mail that fails 5 times also appears as an in-app notification for every admin; clicking it opens this screen on the
+  failed mails.
+
+**Who can see it.** Only admins: the list shows every team member's address and the text of every order mail across all
+brands. The sidebar link is not drawn for anyone else, opening `/mail` by hand sends them back to Home, and the API
+answers 403.
+
+The screen uses two endpoints, which can also be called directly:
 
 - `GET /api/mail?status=failed&type=order.opened` lists the last 100 mails (both filters optional).
 - `POST /api/mail/:id/retry` queues a failed mail again.
-- A mail that fails 5 times also appears as an in-app notification for every admin.
 
 ## Tests
 
@@ -61,6 +76,5 @@ It replaces the sender with `setMailTransport`, so it needs no mail server.
 
 ## Not built
 
-- No screen for the mail list yet (API only).
 - No e-mails to customers, no HTML templates, no per-user "do not e-mail me" setting.
 - "Payment due" is sent when the payment is recorded or its link is sent. There is no reminder before a due date.

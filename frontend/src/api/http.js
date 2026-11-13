@@ -92,6 +92,10 @@ export default {
   acceptExtraction: (id, ids) => req('POST', `/extractions/${id}/accept`, { suggestion_ids: ids }),    // ids omitted = all pending
   dismissExtraction: (id, ids) => req('POST', `/extractions/${id}/dismiss`, { suggestion_ids: ids }),
 
+  // e-mails to the team (docs/MAILER.md). Admins only: the API answers 403 for everyone else.
+  mails: (q) => req('GET', `/mail${qs(q)}`),                                      // the last 100; q.status and q.type narrow the list
+  retryMail: (id) => req('POST', `/mail/${id}/retry`, {}),                        // queue a failed mail again and send it now
+
   notifications: (q) => req('GET', `/notifications${qs(q)}`),
   readAll: () => req('POST', '/notifications/read-all', {}),
 };

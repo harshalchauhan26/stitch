@@ -161,7 +161,8 @@ integrationsRouter.get('/mail', async (req, res) => {
   if (req.query.status) filter.status = String(req.query.status);
   if (req.query.type) filter.type = String(req.query.type);
   const list = await MailOutbox.find(filter).sort({ created_at: -1 }).limit(100).lean();
-  res.json(list.map((m) => ({ id: m._id, type: m.type, to: m.to, subject: m.subject, status: m.status, attempts: m.attempts, next_attempt_at: m.next_attempt_at, sent_at: m.sent_at, last_error: m.last_error, label: m.ref?.label ?? null, created_at: m.created_at })));
+  // body is included so the E-mails screen can show exactly what was sent
+  res.json(list.map((m) => ({ id: m._id, type: m.type, to: m.to, subject: m.subject, body: m.body, status: m.status, attempts: m.attempts, next_attempt_at: m.next_attempt_at, sent_at: m.sent_at, last_error: m.last_error, label: m.ref?.label ?? null, created_at: m.created_at })));
 });
 
 integrationsRouter.post('/mail/:id/retry', async (req, res) => {

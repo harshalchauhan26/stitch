@@ -62,7 +62,8 @@ async function deliver(m) {
     const admins = await User.find({ tenant_id: m.tenant_id, role: 'admin', active: true }).select('_id').lean();
     if (admins.length) {
       await Notification.insertMany(admins.map((a) => ({
-        tenant_id: m.tenant_id, user_id: a._id, type: 'mail.failed', title: `Could not e-mail ${m.to} about "${m.subject}" after ${attempt} attempts: ${error}`, link: null,
+        tenant_id: m.tenant_id, user_id: a._id, type: 'mail.failed', title: `Could not e-mail ${m.to} about "${m.subject}" after ${attempt} attempts: ${error}`,
+        link: '/mail?status=failed',                         // opens the E-mails screen on the failed mails, where Retry is
       })));
     }
   }
