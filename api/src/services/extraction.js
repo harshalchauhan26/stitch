@@ -134,6 +134,8 @@ export function buildPrompt({ rb, fill, client, lead, products, messages, today 
   // walk backwards from the newest message until the character budget is used up
   let used = 0, from = lines.length;
   while (from > 0 && used + lines[from - 1].length < maxChars()) used += lines[--from].length + 1;
+  // the newest message alone is over the budget (a pasted brief): send its start rather than an empty chat
+  if (from === lines.length && lines.length) lines[--from] = `${lines[from].slice(0, maxChars())} …`;
   const catalogue = products.slice(0, 30).map((p) => `${p.sku} | ${p.name} | ${rupees(p.base_price) ?? '-'}`).join('\n');
   const system = `${GUIDE}\n\n## Fields you may fill\n${schemaText(fill)}\n\n## Product catalogue (sku | name | price in rupees)\n${catalogue || '(none)'}`;
   const omitted = from ? `(${from} earlier messages are not shown)\n` : '';

@@ -38,6 +38,16 @@ Stitch is a CRM for an agency (Growify) that sells made-to-order fashion for sev
 
 The plan document itself (`docs/PLAN_v1.md`) was committed on `main` before the branch.
 
+**After v1** (on `main`):
+
+| Commit | By | What it did |
+|---|---|---|
+| `984d4c8` (PR #3) | Aaroh | **Brand setup restored.** Fields switch between Optional and Needed, can be removed and added back; name, phone and product are fixed |
+| `bda9e57`, `16f1e6c` | Aaroh | **Demo sample book** of 13 customers, and the CTO stand-up script (`docs/STANDUP.md`) |
+| `41a82f1` (PR #4) | Harshal | **Chat → lead with AI (Groq).** The Chats page, the model reading a chat against the brand's fields, and accept/dismiss suggestions. See §14 |
+| `4656cbd` and later | Aaroh | **WhatsApp research** (`docs/WHATSAPP_AGENT.md`): Meta One gives no data; Coexistence is the official route |
+| this commit | Aaroh | **Review of PR #4**, one fix (see §14), and this document updated |
+
 ---
 
 ## 3. What is in the repo
@@ -345,13 +355,61 @@ When a lead moves to its brand's won stage, **all of this happens together, or n
 
 ## 14. Chats and issues
 
-- **Chat upload** (API only; no screen yet):
+- **Chat upload** (now on the **Chats** page):
   - **How it's read:** a WhatsApp export is read by code (no AI) and stored as messages, with staff and customer told apart.
   - **Brand and customer:** the brand comes from the WhatsApp number it was exported from. The customer comes from the number in the file name, or is typed in.
   - **Duplicates:** the same file twice is refused. A longer export of the same chat only adds the new messages.
   - **Linking:** a person links the chat to one or more leads of that brand; Stitch never guesses.
 - **Ambiguous chat dates** (for example 05/06) are read as day/month, the Indian format. This can be changed with `CHAT_DATE_ORDER`.
 - **Issues** are size, design, payment and similar problems. They can belong to a product, run open → resolved (a resolution is required), and are recorded in the lead's history.
+
+### Reading a chat with AI (Harshal, PR #4)
+
+The full flow is in `docs/EXTRACTION_FLOW.md`.
+
+**What it does:**
+1. On the **Chats** page, upload a WhatsApp export, then click **Read chat**. You either start a new lead or fill an open lead of that customer.
+2. Stitch sends Groq (Llama 3.3 70B) the following:
+   - the rules (`api/src/prompts/extraction.md`);
+   - **that brand's own fields**, built from its setup, so custom fields are included and hidden fields are never offered;
+   - what Stitch already knows about the customer and lead;
+   - the product catalogue;
+   - the numbered chat.
+3. The model answers in JSON. Each value comes with the message number, a confidence score and a short quote.
+4. Every value goes through **the same checks as a manual edit**:
+   - values that pass become **suggestions**;
+   - values that don't fit become **exceptions**, with the reason.
+5. A person **accepts or dismisses** each suggestion. Accepted values are saved through the normal lead edit, so the version check, History (pointing at the source message), gap recount and undo all apply.
+
+**Safe by design:**
+- The model never writes to a lead. Only a new lead's empty shell and its products are created without a click.
+- All refusals (access, wrong brand, closed lead, existing open lead) happen **before** the model is called, so a refusal costs nothing.
+- The lead is created only **after** the model answers, so a failed call leaves nothing behind.
+- Payment fields and the phone can never be filled from a chat.
+
+**Code:** `services/extraction.js` (the logic), `services/llm.js` (the only file that calls Groq, so switching provider is a one-file change), `routes/extraction.js`, the `extractions` collection, and on the frontend `pages/Chats.jsx` and `components/Suggestions.jsx`.
+
+**Endpoints:**
+- `POST /conversations/:id/extract`
+- `GET /conversations/:id/extractions`
+- `GET /leads/:id/extractions`
+- `POST /extractions/:id/accept`
+- `POST /extractions/:id/dismiss`
+
+**Set up:** put `GROQ_API_KEY` in `api/.env`. Without it, uploads still work but **Read chat** answers 503.
+
+**Review (16 Nov 2026):**
+- Reviewed by Aaroh: all 83 tests pass and the frontend builds.
+- **One fix:** if the newest message alone was longer than the 8,000-character budget (for example a pasted brief), the model was sent an empty chat. It now gets the start of that message. A test covers it.
+
+**Limits:**
+- **Long chats:** only the newest 8,000 characters are read, because of Groq's free tier of 8,000 tokens a minute. Raise `EXTRACT_MAX_CHARS` and `EXTRACT_MAX_TOKENS` after upgrading. Two reads within a minute can hit the limit.
+- **Customer data:** names and numbers go to Groq unmasked. This was a decision; it should be confirmed with the business.
+- **Manual export:** each chat is exported and uploaded by hand. Live chats need WhatsApp Coexistence (`docs/WHATSAPP_AGENT.md`).
+- **Products added to an existing lead:** accept the product, then read again to fill its details.
+- **A new read dismisses the earlier pending suggestions** for that lead.
+- **No locking on Accept.** The buttons disable while a request runs, but two people accepting the same run at the same moment could add a suggested product twice.
+- **Not tested live here:** no Groq key on this machine, so only the tests (with a mocked model) and the build were run.
 
 ---
 
@@ -388,6 +446,7 @@ When a lead moves to its brand's won stage, **all of this happens together, or n
 | Fulfilment | `/customisations/:id/sign-off`, `/customisations/:id/approve`, `/dispatches`, `/dispatches/weekly?week=2026-W43` |
 | Payments | `/payments`, `PATCH /payments/:id` |
 | Chats, issues | `/conversations`, `/conversations/:id/links`, `/conversations/:id/suggestions`, `/issues` |
+| Chat → lead (AI) | `POST /conversations/:id/extract`, `GET /conversations/:id/extractions`, `GET /leads/:id/extractions`, `POST /extractions/:id/accept`, `/dismiss` |
 | Products, webhooks | `/products`, `/brands/:id/webhooks`, `/webhooks/:id/test`, `/webhooks/:id/deliveries`, `/outbox`, `/outbox/:id/redeliver`, `/notifications` |
 
 **Errors** look like `{ "error": "readable message", "code": "..." }`:
@@ -402,7 +461,7 @@ When a lead moves to its brand's won stage, **all of this happens together, or n
 
 ## 17. Tests and checks
 
-- **65 automatic tests** (`npm test` in `api/`) run against a real MongoDB. Each test file uses its own throwaway database. They cover:
+- **83 automatic tests** (`npm test` in `api/`; 65 at v1, the rest from the chat-reading work) run against a real MongoDB. Each test file uses its own throwaway database. They cover:
   - onboarding and duplicates;
   - access per team;
   - leads, gaps and gates;
@@ -444,7 +503,7 @@ The whole branch was reviewed before the PR. Fixed:
 
 ## 19. Not done yet / known limits
 
-- **No AI chat reading.** Leads are typed in; chat upload exists in the API but has no screen.
+- **AI chat reading is manual.** A chat export is uploaded and read on request (§14); there's no live WhatsApp feed yet.
 - **No WhatsApp sending.** "Ask on WhatsApp" and "Send link" are not built.
 - **No Shopify sync.**
 - **No Products screen.** The catalogue works in the API, and the demo brands come with products.
@@ -452,4 +511,4 @@ The whole branch was reviewed before the PR. Fixed:
 - **No priority or win-probability score.**
 - **A Yes/No field answered "No" still counts as a gap.**
 - **Removing a pipeline stage that has leads is refused.** A move-the-leads option can come later.
-- **Not deployed yet.** It's ready for Render plus MongoDB Atlas; see `api/README.md`.
+- **Deployed by Harshal:** the frontend on Vercel and the API on Render's free tier, which sleeps, so the first load takes about 30 seconds.

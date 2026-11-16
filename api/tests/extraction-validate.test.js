@@ -43,6 +43,13 @@ describe('what the model is offered', () => {
     assert.match(p.user, /\[399\] STAFF/);
     assert.ok(p.truncated && p.read < 400);
   });
+  test('a newest message longer than the whole budget is still sent (cut), never an empty chat', () => {
+    const messages = [{ idx: 0, role: 'customer', sender: 'x', text: 'hi' }, { idx: 1, role: 'customer', sender: 'x', text: 'lehenga for my wedding on 14 Dec. '.repeat(400) }];
+    const p = buildPrompt({ rb, fill, client: { name: 'Riya' }, lead: base().lead, products: [], messages, today: '2026-10-20' });
+    assert.equal(p.read, 1);
+    assert.match(p.user, /\[1\] CUSTOMER \(x\): lehenga for my wedding/);
+    assert.ok(p.user.length < 8_000 + 2_000, 'the cut message stays within the budget');
+  });
 });
 
 describe('checking what the model says', () => {
