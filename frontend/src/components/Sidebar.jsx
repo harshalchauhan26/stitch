@@ -8,9 +8,8 @@ export default function Sidebar() {
   const link = ({ isActive }) => (isActive ? 'on' : '');
   return (
     <aside style={{ width: 224, flexShrink: 0, borderRight: '1px solid var(--ln)', display: 'flex', flexDirection: 'column', gap: 24, padding: '18px 12px 14px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '0 10px', height: 28 }}>
-        <Logo />
-        <span style={{ fontWeight: 600, fontSize: 15, letterSpacing: '-.01em' }}>Stitch</span>
+      <div style={{ padding: '0 8px', height: 40, display: 'flex', alignItems: 'center' }}>
+        <Logo height={38} />
       </div>
       <nav className="nav" aria-label="Main">
         <NavLink to="/" end className={link}><Icon name="home" />Home</NavLink>

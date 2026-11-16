@@ -17,9 +17,9 @@ export default function Login() {
 
   return (
     <div className={`app st${dark ? ' dark' : ''}`} style={{ alignItems: 'center', justifyContent: 'center' }}>
-      <form onSubmit={submit} style={{ width: 340, display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}><Logo /><span style={{ fontWeight: 600, fontSize: 15 }}>Stitch</span></div>
-        <h1 className="ttl">Sign in</h1>
+      <form onSubmit={submit} style={{ width: 400, maxWidth: 'calc(100% - 32px)', display: 'flex', flexDirection: 'column', gap: 14, padding: '36px 36px 28px', background: 'var(--sf)', border: '1px solid var(--ln)', borderRadius: 24, boxShadow: 'var(--shadow)' }}>
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 4 }}><Logo height={52} /></div>
+        <h1 className="ttl" style={{ textAlign: 'center', marginBottom: 6 }}>Welcome back</h1>
         <input className="inp" type="email" placeholder="Email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} autoFocus />
         <div style={{ position: 'relative', display: 'flex' }}>
           <input className="inp" type={show ? 'text' : 'password'} placeholder="Password" autoComplete="current-password" value={password}
@@ -28,7 +28,7 @@ export default function Login() {
             style={{ position: 'absolute', right: 2, top: 2, height: 28 }}>{show ? 'Hide' : 'Show'}</button>
         </div>
         {error && <span className="err-t">{error}</span>}
-        <button className="btn pri" type="submit" disabled={busy || !email || !password} style={{ justifyContent: 'center' }}>{busy ? 'Signing in…' : 'Sign in'}</button>
+        <button className="btn pri" type="submit" disabled={busy || !email || !password} style={{ justifyContent: 'center', height: 40 }}>{busy ? 'Signing in…' : 'Sign in'}</button>
         {import.meta.env.DEV && <span className="mut" style={{ fontSize: 11 }}>Demo logins: admin@stitch.test, priya@stitch.test (sales), meera@stitch.test (pod lead). Password stitch123.</span>}
       </form>
     </div>

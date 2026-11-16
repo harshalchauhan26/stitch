@@ -1,3 +1,4 @@
+import logoUrl from '../assets/logo.png';
 // All icons from the design file, keyed by name. <Icon name="lock" small /> -> 12px variant.
 const P = {
   home: <><path d="M3 8.5 10 3l7 5.5V17H3z" /><path d="M8 17v-5h4v5" /></>,
@@ -36,11 +37,6 @@ export default function Icon({ name, small, className = '', style, ...rest }) {
   );
 }
 
-export function Logo() {
-  return (
-    <svg viewBox="0 0 22 22" style={{ width: 22, height: 22, fill: 'none', stroke: 'var(--gold)', strokeWidth: 1.6, strokeLinecap: 'round' }} aria-hidden="true">
-      <path d="M3 16C7 5 15 5 19 16" strokeDasharray="2.2 2.6" />
-      <circle cx="19" cy="16" r="1.6" />
-    </svg>
-  );
+export function Logo({ height = 34 }) {
+  return <img src={logoUrl} alt="Stitch" style={{ height, width: 'auto', display: 'block' }} />;
 }
