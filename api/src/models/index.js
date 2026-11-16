@@ -5,6 +5,7 @@ export * from './config.js';
 export * from './crm.js';
 export * from './orders.js';
 export * from './integrations.js';
+export * from './enquiries.js';
 
 /** Creates every collection and its indexes up front. Collections must exist before they are written inside a transaction. */
 export async function ensureSchema() {
