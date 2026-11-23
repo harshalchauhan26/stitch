@@ -76,6 +76,64 @@ Our dev reports an account where data was lost and the account reset. From Meta'
 5. The next day, check the phone still has every chat, re-link the 4 devices, and confirm messages are reaching Stitch.
 6. Open the app at least weekly, and never uninstall it.
 
+### Runbook: connecting a number without losing data (23 Nov 2026)
+
+**The problem Harshal hit:** Meta warned that the data might be deleted.
+
+**Most likely cause:** he added the number in Meta's **developer dashboard** (developers.facebook.com → the app → WhatsApp → API Setup → "Add phone number"). That screen is the **plain Cloud API sign-up, not Coexistence**.
+- For a number that's already on WhatsApp, it asks you to **delete the WhatsApp account first**, so the warning is real.
+- A number registered that way **can't use Coexistence later**: Meta's Embedded Signup page says numbers created through the developer app can't be onboarded through it.
+
+**Why it happens:** Coexistence isn't available from the developer dashboard. Meta only offers it through **Embedded Signup run by a Solution Partner or Tech Provider**, with the Business-app option switched on.
+
+**Other possible causes** (check them with step 1):
+
+| Cause | How to tell | Fix |
+|---|---|---|
+| The number is on **normal WhatsApp**, not the Business app | The app icon has no "B" | Move it to WhatsApp Business first (chats move with it), then use Coexistence |
+| The Business app is too old | Below 2.24.17 | Update the app |
+| The number was **already registered as API-only** during the "verification" | It shows in WhatsApp Manager as connected, and the app on the phone was logged out | Use it as a pure API test number, or delete it from WhatsApp Manager and start again on the Business app |
+| The warning is only the normal Coexistence notice | It talks about linked devices, disappearing messages or broadcast lists, not deleting the account | Fine. Continue |
+| The provider doesn't support Coexistence | It asks to delete the account | Use a provider that names Coexistence (360dialog, YCloud, Interakt, AiSensy) |
+
+**Steps:**
+
+0. **Stop.** On any number with real chats, don't press anything that says delete, remove or migrate the account.
+1. **Screenshot the warning** and note which website or app showed it. That shows which cause above it is.
+2. **Back up the real numbers first** (your idea):
+   - On the phone: WhatsApp Business → Settings → Chats → Chat backup → Back up to Google Drive, including videos.
+   - For the important customer chats: open the chat → ⋮ → More → Export chat (without media), then upload it on Stitch's **Chats** page. That data is then in Stitch whatever happens.
+3. **Use the sample number as a test,** since it has no real data:
+   - If it isn't already registered as API-only, install the WhatsApp Business app (latest version) on a spare phone and register the sample number.
+   - Set up a business profile and send it about 10 test chats from personal phones ("need a lehenga for 14 Dec, budget 2L").
+   - If it was already registered as API-only, keep it as an API test number for building the receiver (step 5). Then put a second spare SIM on the Business app to test Coexistence.
+4. **Connect through a provider's Coexistence flow:**
+   - Sign up with 360dialog (or YCloud).
+   - Choose "Connect existing WhatsApp Business App" (Coexistence).
+   - Log in with the Facebook account that owns the verified Meta Business portfolio.
+   - Enter the number. Meta sends a WhatsApp message and a QR code to the phone. Scan it and approve.
+   - Choose **Share chat history**, and allow contacts.
+   - Check that the history and contacts are requested within **24 hours** (only one try). Ask the provider whether they do this or we must.
+5. **Build the receiver in Stitch** (`POST /api/whatsapp/webhook`). It must:
+   - check the signature;
+   - find the brand from the number (the `whatsapp_accounts` collection);
+   - save each message into `conversations` and `messages`, skipping repeats by message ID;
+   - store `messages` (from customers), `smb_message_echoes` (replies sent from the phone) and `history` (old chats, stored without triggering anything);
+   - run the chat reading on request.
+6. **Test:**
+   - the phone still has every chat;
+   - a test message from a personal phone reaches Stitch;
+   - a reply sent from the phone reaches Stitch;
+   - the old chats arrive;
+   - after re-scanning the QR on linked devices, they still work.
+7. **Only then** connect one low-stakes real brand number (after the backup in step 2). Wait a week before the next one.
+
+**Things that will bite us later:**
+- **Render's free tier sleeps,** and the first request takes about 30 seconds. Meta and providers retry, but messages can be late or dropped. Use a paid instance (or keep it awake) before connecting real numbers.
+- **The phone must be opened at least every 14 days,** or the link drops.
+- **Only about the last 14 days of media** come over in the old chats.
+- **Embedded Signup v2 and v3 are deprecated,** so the provider must be on v4.
+
 ## 3. Cost (India, 2026)
 
 | What | Cost |
