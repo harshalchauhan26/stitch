@@ -46,7 +46,8 @@ The plan document itself (`docs/PLAN_v1.md`) was committed on `main` before the 
 | `bda9e57`, `16f1e6c` | Aaroh | **Demo sample book** of 13 customers, and the CTO stand-up script (`docs/STANDUP.md`) |
 | `41a82f1` (PR #4) | Harshal | **Chat → lead with AI (Groq).** The Chats page, the model reading a chat against the brand's fields, and accept/dismiss suggestions. See §14 |
 | `4656cbd` and later | Aaroh | **WhatsApp research** (`docs/WHATSAPP_AGENT.md`): Meta One gives no data; Coexistence is the official route |
-| this commit | Aaroh | **Review of PR #4**, one fix (see §14), and this document updated |
+| `fb68961` | Aaroh | **Review of PR #4**, one fix (see §14), and this document updated |
+| `74693dc` (merge) | Harshal, reviewed by Aaroh | **Four branches:** `fix/v1-leftovers`, `mailer`, `mail-screen`, `ui-redesign`. See §20 |
 
 ---
 
@@ -461,7 +462,7 @@ The full flow is in `docs/EXTRACTION_FLOW.md`.
 
 ## 17. Tests and checks
 
-- **83 automatic tests** (`npm test` in `api/`; 65 at v1, the rest from the chat-reading work) run against a real MongoDB. Each test file uses its own throwaway database. They cover:
+- **143 automatic tests** (`npm test` in `api/`; 65 at v1, the rest from chat reading, Shopify, the mailer, enquiries and Harshal's numbered pipeline tests in `docs/TESTS.md`) run against a real MongoDB. Each test file uses its own throwaway database. They cover:
   - onboarding and duplicates;
   - access per team;
   - leads, gaps and gates;
@@ -505,10 +506,44 @@ The whole branch was reviewed before the PR. Fixed:
 
 - **AI chat reading is manual.** A chat export is uploaded and read on request (§14); there's no live WhatsApp feed yet.
 - **No WhatsApp sending.** "Ask on WhatsApp" and "Send link" are not built.
-- **No Shopify sync.**
-- **No Products screen.** The catalogue works in the API, and the demo brands come with products.
+- **Shopify: products only.** Active products sync into Stitch (§20); orders aren't written back to Shopify yet.
 - **No automatic stage moves.** A person always moves the stage.
 - **No priority or win-probability score.**
-- **A Yes/No field answered "No" still counts as a gap.**
-- **Removing a pipeline stage that has leads is refused.** A move-the-leads option can come later.
 - **Deployed by Harshal:** the frontend on Vercel and the API on Render's free tier, which sleeps, so the first load takes about 30 seconds.
+
+---
+
+## 20. Harshal's branches, merged 23 Nov 2026
+
+Built by Harshal from 10 to 16 Nov. Reviewed and merged by Aaroh: 143 tests pass and the frontend builds. No changes were needed.
+
+| Branch | What it added |
+|---|---|
+| `fix/v1-leftovers` | **Products screen** and **Shopify product sync**. **Removing a stage that has leads** now moves them to a chosen stage. A Yes/No "No" counts as filled unless the field is a gate. Automatic stage moves proposed (`docs/AUTO_STAGE_MOVES.md`, doc only) |
+| `mailer` | **Emails to the brand's team** for: order opened, payment due, spec and measurement changes, shipments, order closed |
+| `mail-screen` | An **Emails** screen for admins: what was sent, what failed, and Retry |
+| `ui-redesign` | A public **landing page** (`/landing/`) with a demo-request form, the app restyled (green palette, Hanken Grotesk and Cormorant fonts, new logo), and numbered pipeline tests |
+
+**How each one works:**
+- **Shopify sync:**
+  - Products → **Sync from Shopify**, for admins and pod leads.
+  - It reads only the brand's **active** products, one Stitch product per Shopify product (SKU = the first variant's SKU, price = the lowest variant price).
+  - It's safe to run again. A product removed from Shopify is switched off, never deleted.
+  - A hand-typed product with the same SKU is linked instead of duplicated.
+  - Synced products' name, SKU, price and status can only be changed in Shopify.
+  - Set up per brand in `api/.env` with `SHOPIFY_<CODE>_DOMAIN` and `SHOPIFY_<CODE>_TOKEN` (the token only needs read_products).
+- **Emails:**
+  - Queued in the same transaction as the change, then sent by a worker in the API process, with retries at 1, 5, 30 and 120 minutes.
+  - After 5 failures the mail is marked failed and admins get a notification.
+  - Without `SMTP_HOST` the emails are only printed to the console. To send for real, install `nodemailer` and set the SMTP variables (`docs/MAILER.md`).
+  - Customers are never emailed.
+- **Landing page form:**
+  - `POST /api/enquiries` is open to anyone.
+  - It's limited to 5 requests per hour per IP and has a hidden spam trap.
+  - Admins read the requests with `GET /api/enquiries`.
+
+**Review notes (nothing blocking):**
+- **Shopify tokens:** they live in `api/.env`, so adding a brand's store needs a redeploy. A per-brand settings screen can come later; only `services/shopify.js` would change.
+- **Enquiries:** they aren't tied to a company account, so every admin sees all of them. That's fine while there is one agency.
+- **Real emails:** to send them on Render, `nodemailer` has to be added to `api/package.json` (it isn't installed by default).
+- **Unused packages:** the old font packages (Fraunces, IBM Plex) are still in `frontend/package.json` but no longer imported, and can be removed.
