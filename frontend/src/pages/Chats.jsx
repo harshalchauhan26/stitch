@@ -122,7 +122,7 @@ function ChatPanel({ id }) {
       {/* the stored chat, collapsed: customer lines in dark, brand (staff) lines greyed */}
       <section className="tbl" style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <b style={{ fontWeight: 600 }}>{conv.file_name}</b>
+          <b style={{ fontWeight: 600 }}>{conv.file_name || 'Live WhatsApp chat'}</b>
           <span className="mut">{plural(conv.message_count, 'message')} · {conv.customer_message_count} from the customer</span>
           <span style={{ flexGrow: 1 }} />
           <button type="button" className="btn gh sm" onClick={() => setShowChat((s) => !s)}>{showChat ? 'Hide chat' : 'Show chat'}</button>

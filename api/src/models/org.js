@@ -77,6 +77,8 @@ const WhatsappAccountSchema = new Schema({
   brand_id: { type: ObjectId, ref: 'Brand', required: true },
   phone_e164: { type: String, required: true },
   display_name: { type: String, default: null },
+  // Meta's id for this number on the WhatsApp Business Platform; learnt from the first live message (services/whatsappInbound.js)
+  wa_phone_number_id: { type: String, default: null },
   active: { type: Boolean, default: true },
 }, baseOptions('whatsapp_accounts'));
 WhatsappAccountSchema.index({ tenant_id: 1, phone_e164: 1 }, { unique: true });

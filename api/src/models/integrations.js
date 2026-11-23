@@ -75,6 +75,21 @@ const MailOutboxSchema = new Schema({
 MailOutboxSchema.index({ status: 1, next_attempt_at: 1 });
 MailOutboxSchema.index({ tenant_id: 1, created_at: -1 });
 
+// Every WhatsApp webhook call, stored as it arrived before anything is done with it (services/whatsappInbound.js).
+// That way Meta gets its 200 straight away, nothing is lost if processing fails, and the raw payloads of the pilot can be
+// read to check them against what the code expects. No tenant: the tenant is only known once the number is matched.
+const WaInboundSchema = new Schema({
+  payload: { type: Mixed, required: true },
+  status: { type: String, enum: ['pending', 'processed', 'unmatched', 'failed'], default: 'pending' },
+  tenant_id: { type: ObjectId, ref: 'Tenant', default: null },
+  summary: { type: Mixed, default: null },                    // what processing did: { stored, skipped, fields, numbers }
+  error: { type: String, default: null },
+  attempts: { type: Number, default: 0 },
+}, baseOptions('wa_inbound'));
+WaInboundSchema.index({ status: 1, created_at: 1 });
+WaInboundSchema.index({ created_at: -1 });
+
+export const WaInbound = mongoose.model('WaInbound', WaInboundSchema);
 export const WebhookEndpoint = mongoose.model('WebhookEndpoint', WebhookEndpointSchema);
 export const Outbox = mongoose.model('Outbox', OutboxSchema);
 export const WebhookDelivery = mongoose.model('WebhookDelivery', WebhookDeliverySchema);

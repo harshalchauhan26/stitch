@@ -547,3 +547,56 @@ Built by Harshal from 10 to 16 Nov. Reviewed and merged by Aaroh: 143 tests pass
 - **Enquiries:** they aren't tied to a company account, so every admin sees all of them. That's fine while there is one agency.
 - **Real emails:** to send them on Render, `nodemailer` has to be added to `api/package.json` (it isn't installed by default).
 - **Unused packages:** the old font packages (Fraunces, IBM Plex) are still in `frontend/package.json` but no longer imported, and can be removed.
+
+---
+
+## 21. Live WhatsApp messages (the receiver), 23 Nov 2026
+
+This lets a brand number connected through **Coexistence** (`docs/WHATSAPP_AGENT.md`) send its chats into Stitch by itself, with no export and upload. The team keeps using the WhatsApp Business app.
+
+**How it works:**
+1. The provider (or Meta) calls `POST /api/whatsapp/webhook` for every message.
+2. Stitch checks the caller: Meta's signature (`WA_APP_SECRET`), or a secret key in the URL (`WA_WEBHOOK_KEY`). With neither set, every call is refused.
+3. The raw call is saved in `wa_inbound`, and Stitch answers 200 straight away, so nothing is lost if processing fails.
+4. A worker processes the saved calls one at a time, oldest first:
+   - **The brand** is found from the WhatsApp number. Meta's phone-number ID is remembered for next time.
+   - **The customer** is found by phone, or created with their WhatsApp profile name. A typed name is never overwritten.
+   - **The chat** is the same conversation a chat upload would use (one per brand number and customer), so the Chats page and the **AI chat reading** work on it unchanged.
+   - **What's stored:**
+     - customer messages;
+     - replies the team sends from the phone (`smb_message_echoes`), as staff;
+     - old chats (`history`).
+   - **Ordering:** old chats arriving later are put back in time order.
+   - **Media:** photos, voice notes and documents are stored as their type plus caption. The files aren't downloaded.
+   - **Ignored:** reactions, delivery receipts and contacts sync are skipped and counted.
+5. **Repeats are harmless:** a message is stored once per WhatsApp message ID.
+6. **Unknown numbers:** a call for a number Stitch doesn't know is kept as **unmatched**. Add the number to the brand, then retry it.
+
+**Endpoints:**
+- `GET /api/whatsapp/webhook`: Meta's one-time check.
+- `POST /api/whatsapp/webhook`: incoming calls.
+- `GET /api/whatsapp/inbound`: admin only; the latest calls, with what happened to each and the raw payload.
+- `POST /api/whatsapp/inbound/:id/retry`: admin only.
+
+**Code:**
+- `services/whatsappInbound.js`
+- `routes/whatsapp.js`
+- the `wa_inbound` collection
+- `whatsapp_accounts.wa_phone_number_id`, `messages.wamid`, and `conversations.source = 'whatsapp'`
+
+**Tests:** 10 cases in `tests/whatsapp-inbound.test.js` (153 in total, all passing):
+- signatures and URL keys;
+- Meta's verify check;
+- repeats;
+- staff replies;
+- old chats arriving late;
+- unmatched numbers then retry;
+- access per team.
+
+**Not done yet / to check in the pilot:**
+- **The payload shapes follow Meta's Cloud API docs** but haven't been seen from a real number yet. The raw payloads are kept so the first real ones can be checked.
+- **Media files aren't downloaded**, only noted.
+- **The AI reading isn't run automatically** on new messages. A person still clicks **Read chat**.
+- **Live chats aren't listed on the Chats page yet.** It only shows the chat you just uploaded. A list of live chats per brand is the next UI step.
+- **Chat exports and live messages may overlap.** If the same chat is both uploaded and received live, the same messages can appear twice, because uploads and live messages are deduplicated differently.
+- **Render's free tier sleeps,** so the first call after a quiet spell is slow. Meta retries, but use a paid instance for real numbers.

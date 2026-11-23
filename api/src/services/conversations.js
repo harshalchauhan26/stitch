@@ -107,7 +107,7 @@ export async function unlinkLead(scope, conversationId, leadId) {
 }
 
 export const conversationDto = (c) => ({
-  id: c._id, whatsapp_account_id: c.whatsapp_account_id, brand_id: c.brand_id, client_id: c.client_id, file_name: c.file_name,
+  id: c._id, whatsapp_account_id: c.whatsapp_account_id, brand_id: c.brand_id, client_id: c.client_id, source: c.source ?? 'chat_export', file_name: c.file_name,
   first_msg_at: c.first_msg_at, last_msg_at: c.last_msg_at, message_count: c.message_count, customer_message_count: c.customer_message_count,
   status: c.status, lead_ids: c.lead_links.map((l) => l.lead_id), created_at: c.created_at,
 });

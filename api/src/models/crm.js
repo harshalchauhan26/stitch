@@ -116,7 +116,8 @@ const ConversationSchema = new Schema({
   whatsapp_account_id: { type: ObjectId, ref: 'WhatsappAccount', required: true },
   brand_id: { type: ObjectId, ref: 'Brand', required: true },   // always the account's brand
   client_id: { type: ObjectId, ref: 'Client', required: true },
-  source: { type: String, enum: ['chat_export'], default: 'chat_export' },
+  // chat_export = uploaded file; whatsapp = arrived live from the WhatsApp Business Platform (services/whatsappInbound.js)
+  source: { type: String, enum: ['chat_export', 'whatsapp'], default: 'chat_export' },
   file_name: { type: String, default: null },
   content_hash: { type: String, required: true },
   first_msg_at: { type: Date, default: null },
@@ -143,6 +144,7 @@ const MessageSchema = new Schema({
   text: { type: String, default: '' },
   media: { type: String, default: null },
   msg_hash: { type: String, required: true },
+  wamid: { type: String, default: null },                // WhatsApp's own message id, for messages that arrived live
 }, { collection: 'messages', versionKey: false });
 MessageSchema.index({ conversation_id: 1, idx: 1 }, { unique: true });
 MessageSchema.index({ conversation_id: 1, msg_hash: 1 }, { unique: true });

@@ -114,12 +114,10 @@ Our dev reports an account where data was lost and the account reset. From Meta'
    - Enter the number. Meta sends a WhatsApp message and a QR code to the phone. Scan it and approve.
    - Choose **Share chat history**, and allow contacts.
    - Check that the history and contacts are requested within **24 hours** (only one try). Ask the provider whether they do this or we must.
-5. **Build the receiver in Stitch** (`POST /api/whatsapp/webhook`). It must:
-   - check the signature;
-   - find the brand from the number (the `whatsapp_accounts` collection);
-   - save each message into `conversations` and `messages`, skipping repeats by message ID;
-   - store `messages` (from customers), `smb_message_echoes` (replies sent from the phone) and `history` (old chats, stored without triggering anything);
-   - run the chat reading on request.
+5. **The receiver in Stitch: built** (23 Nov 2026, see IMPLEMENTATION.md §21).
+   - The webhook address is `https://<api>/api/whatsapp/webhook`. Give the provider `...?key=<WA_WEBHOOK_KEY>`, or set `WA_APP_SECRET` and `WA_VERIFY_TOKEN` if Meta calls us directly.
+   - **Add the number to the brand in Stitch first** (Settings → brand → WhatsApp numbers). Calls for an unknown number are kept as *unmatched* and can be retried after adding it.
+   - During the pilot, check what arrived with `GET /api/whatsapp/inbound` (admin). The raw payloads are kept there.
 6. **Test:**
    - the phone still has every chat;
    - a test message from a personal phone reaches Stitch;

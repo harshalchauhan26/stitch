@@ -6,6 +6,7 @@ import { ensureSchema, Tenant } from './models/index.js';
 import { bootstrap } from './services/bootstrap.js';
 import { startMailWorker } from './services/mail.js';
 import { startWebhookWorker } from './services/webhooks.js';
+import { kickInbound } from './services/whatsappInbound.js';
 
 const config = loadConfig();
 const refuse = (problems) => { console.error(`Stitch API will not start:\n- ${problems.join('\n- ')}`); process.exit(1); };
@@ -21,4 +22,5 @@ if (created) console.log(`Created tenant "${first.tenant.name}". Sign in as ${fi
 
 if (config.webhookWorker) startWebhookWorker();
 if (config.mailWorker) startMailWorker();
+kickInbound();                                     // WhatsApp calls stored but not processed before a restart
 createApp(config).listen(config.port, () => console.log(`Stitch API on http://localhost:${config.port}/api`));

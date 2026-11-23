@@ -13,13 +13,15 @@ import { leadsRouter } from './routes/leads.js';
 import { ordersRouter } from './routes/orders.js';
 import { orgRouter } from './routes/org.js';
 import { settingsRouter } from './routes/settings.js';
+import { whatsappRouter } from './routes/whatsapp.js';
 
 export function createApp(config) {
   const app = express();
   app.disable('x-powered-by');
   app.set('trust proxy', config.trustProxy);
   app.use(cors(config.corsOrigins.length ? { origin: config.corsOrigins } : { origin: !config.prod }));
-  app.use(express.json({ limit: '8mb' }));            // chat exports arrive as JSON text
+  // chat exports arrive as JSON text. The WhatsApp webhook also keeps the raw bytes: Meta signs those, not the parsed JSON
+  app.use(express.json({ limit: '8mb', verify: (req, _res, buf) => { if (req.originalUrl.startsWith('/api/whatsapp/webhook')) req.rawBody = buf; } }));
 
   const api = express.Router();
   api.get('/health', (_req, res) => {
@@ -27,6 +29,7 @@ export function createApp(config) {
     res.status(db ? 200 : 503).json({ ok: db, db: db ? 'up' : 'down' });
   });
   api.use(authRouter);
+  api.use(whatsappRouter);                           // Meta / the provider: checked by signature, not by login
   api.use(enquiriesRouter);                          // the landing-page form is open to anyone; its list route checks the login itself
   api.use(requireAuth);
   api.use(orgRouter); 
