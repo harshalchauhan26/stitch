@@ -10,6 +10,7 @@ import { Brand, Customisation, Notification, Order, Outbox, Payment, Team, User 
 import { commitWrite, writeEvent } from './events.js';
 import { computeGaps, gapCounts } from './gaps.js';
 import { nextNumber } from './leads.js';
+import { mailOrderOpened } from './mailFlows.js';
 import { orderMoney } from './payments.js';
 
 const { ObjectId } = mongoose.Types;
@@ -106,5 +107,7 @@ export async function winLead(session, scope, lead, client, rb, { reason, overri
       tenant_id: lead.tenant_id, user_id: m._id, type: 'order.created', title: `${orderNo} created for ${client.name || client.phone_e164} (${brand.name})`, link: `/orders/${orderId}`,
     })), { session });
   }
+  // and an e-mail to the same teams (docs/MAILER.md)
+  await mailOrderOpened(session, { order: { ...order, items: orderItems }, brand, client, leadNo: lead.lead_no });
   return { id: lead._id, stage: rb.pipeline.won, order_id: orderId, order_no: orderNo };
 }

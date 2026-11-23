@@ -32,14 +32,20 @@ export default {
   brandFields: (id) => req('GET', `/brands/${id}/fields`),
   addBrandField: (id, body) => req('POST', `/brands/${id}/fields`, body),
   updateBrandField: (id, key, body) => req('PATCH', `/brands/${id}/fields/${key}`, body),
-  savePipeline: (id, stages) => req('PUT', `/brands/${id}/pipeline`, { stages }),
+  // moveLeadsTo (optional): where the leads of a removed stage go. Left out, a removed stage that still has leads is refused.
+  savePipeline: (id, stages, moveLeadsTo) => req('PUT', `/brands/${id}/pipeline`, { stages, move_leads_to: moveLeadsTo }),
   teams: () => req('GET', '/teams'),
   createTeam: (body) => req('POST', '/teams', body),
   updateTeam: (id, body) => req('PATCH', `/teams/${id}`, body),
   users: () => req('GET', '/users'),
   createUser: (body) => req('POST', '/users', body),
   updateUser: (id, body) => req('PATCH', `/users/${id}`, body),
-  products: (brand) => req('GET', `/products${qs({ brand })}`),
+  products: (brand) => req('GET', `/products${qs({ brand })}`),                  // active products of a brand, for the pickers
+  // the Products page: q = search text, active: 'all' also lists the switched-off ones
+  productList: (q) => req('GET', `/products${qs(q)}`),
+  createProduct: (body) => req('POST', '/products', body),                       // { brand_id, sku, name, category?, base_price (paise)?, lead_time_days? }
+  updateProduct: (id, body) => req('PATCH', `/products/${id}`, body),
+  syncProducts: (brandId) => req('POST', `/brands/${brandId}/products/sync`, {}), // pull the brand's active products from its Shopify store
 
   // leads
   leads: (q) => req('GET', `/leads${qs(q)}`),
@@ -85,6 +91,10 @@ export default {
   leadExtractions: (id) => req('GET', `/leads/${id}/extractions`),                // earlier reads for this lead (the drawer shows the one with pending values)
   acceptExtraction: (id, ids) => req('POST', `/extractions/${id}/accept`, { suggestion_ids: ids }),    // ids omitted = all pending
   dismissExtraction: (id, ids) => req('POST', `/extractions/${id}/dismiss`, { suggestion_ids: ids }),
+
+  // e-mails to the team (docs/MAILER.md). Admins only: the API answers 403 for everyone else.
+  mails: (q) => req('GET', `/mail${qs(q)}`),                                      // the last 100; q.status and q.type narrow the list
+  retryMail: (id) => req('POST', `/mail/${id}/retry`, {}),                        // queue a failed mail again and send it now
 
   notifications: (q) => req('GET', `/notifications${qs(q)}`),
   readAll: () => req('POST', '/notifications/read-all', {}),

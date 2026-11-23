@@ -8,20 +8,22 @@ export default function Sidebar() {
   const link = ({ isActive }) => (isActive ? 'on' : '');
   return (
     <aside style={{ width: 224, flexShrink: 0, borderRight: '1px solid var(--ln)', display: 'flex', flexDirection: 'column', gap: 24, padding: '18px 12px 14px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '0 10px', height: 28 }}>
-        <Logo />
-        <span style={{ fontWeight: 600, fontSize: 15, letterSpacing: '-.01em' }}>Stitch</span>
+      <div style={{ padding: '0 8px', height: 40, display: 'flex', alignItems: 'center' }}>
+        <Logo height={38} />
       </div>
       <nav className="nav" aria-label="Main">
         <NavLink to="/" end className={link}><Icon name="home" />Home</NavLink>
         <NavLink to="/leads" className={link}><Icon name="leads" />Leads<span className="m mut" style={{ marginLeft: 'auto', fontSize: 11 }}>{summary.leads}</span></NavLink>
         <NavLink to="/orders" className={link}><Icon name="orders" />Orders<span className="m mut" style={{ marginLeft: 'auto', fontSize: 11 }}>{summary.orders}</span></NavLink>
+        <NavLink to="/products" className={link}><Icon name="tag" />Products</NavLink>
         <NavLink to="/gaps" className={link}><Icon name="gaps" />Gaps<span className="chip amb m" style={{ marginLeft: 'auto', height: 18 }}>{summary.gaps}</span></NavLink>
         <NavLink to="/chats" className={link}><Icon name="chat" />Chats</NavLink>
         <NavLink to="/dispatches" className={link}><Icon name="truck" />Dispatches</NavLink>
       </nav>
       <div style={{ flexGrow: 1 }} />
       <nav className="nav" aria-label="Admin">
+        {/* E-mails is for admins only, so the link is not drawn for anyone else */}
+        {user?.role === 'admin' && <NavLink to="/mail" className={link}><Icon name="mail" />E-mails</NavLink>}
         <NavLink to="/settings" className={link}><Icon name="settings" />Settings</NavLink>
       </nav>
       <div className="hl" style={{ padding: '12px 10px 0', display: 'flex', alignItems: 'center', gap: 10 }}>

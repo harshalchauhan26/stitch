@@ -1,3 +1,4 @@
+import logoUrl from '../assets/logo.png';
 // All icons from the design file, keyed by name. <Icon name="lock" small /> -> 12px variant.
 const P = {
   home: <><path d="M3 8.5 10 3l7 5.5V17H3z" /><path d="M8 17v-5h4v5" /></>,
@@ -5,6 +6,10 @@ const P = {
   orders: <><path d="M3 6.5 10 3l7 3.5v7L10 17l-7-3.5z" /><path d="M3 6.5 10 10l7-3.5M10 10v7" /></>,
   // speech bubble with two lines, for Chats (the plain "leads" icon is the empty bubble)
   chat: <><path d="M4 4h12v9H9l-4 3v-3H4z" /><path d="M7 7.5h6M7 10h4" /></>,
+  // envelope, for the E-mails screen
+  mail: <><rect x="3" y="5" width="14" height="10" rx="1.5" /><path d="m3.5 6 6.5 5 6.5-5" /></>,
+  // price tag, for Products
+  tag: <><path d="M3 3h7l7 7-7 7-7-7z" /><circle cx="7" cy="7" r="1.2" /></>,
   gaps: <><circle cx="10" cy="10" r="7" /><path d="M10 6.5v4.5M10 13.5v.01" /></>,
   settings: <><path d="M4 6h8M15 6h1M4 14h2M9 14h7" /><circle cx="13.5" cy="6" r="1.5" /><circle cx="7.5" cy="14" r="1.5" /></>,
   search: <><circle cx="9" cy="9" r="5.5" /><path d="m13 13 4 4" /></>,
@@ -32,11 +37,6 @@ export default function Icon({ name, small, className = '', style, ...rest }) {
   );
 }
 
-export function Logo() {
-  return (
-    <svg viewBox="0 0 22 22" style={{ width: 22, height: 22, fill: 'none', stroke: 'var(--gold)', strokeWidth: 1.6, strokeLinecap: 'round' }} aria-hidden="true">
-      <path d="M3 16C7 5 15 5 19 16" strokeDasharray="2.2 2.6" />
-      <circle cx="19" cy="16" r="1.6" />
-    </svg>
-  );
+export function Logo({ height = 34 }) {
+  return <img src={logoUrl} alt="Stitch" style={{ height, width: 'auto', display: 'block' }} />;
 }

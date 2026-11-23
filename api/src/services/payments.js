@@ -9,6 +9,7 @@ import { Client, Lead, Order, Payment } from '../models/index.js';
 import { commitWrite } from './events.js';
 import { computeGaps, gapCounts } from './gaps.js';
 import { getLead } from './leads.js';
+import { mailPaymentDue } from './mailFlows.js';
 import { loadBrandRules } from './rules.js';
 
 const LIVE = ['link_sent', 'received'];                  // statuses that count towards "advance amount"
@@ -116,6 +117,7 @@ export async function addLeadPayment(scope, leadId, body = {}) {
     if (lead.stage_type === 'won') throw conflict(`This lead is ${lead.stage}: record payments on its order.`, { code: 'lead_locked', order_id: lead.converted_order_id });
     const [payment] = await Payment.create([{ ...p, tenant_id: scope.tenantId, brand_id: lead.brand_id, client_id: lead.client_id, lead_id: lead._id, recorded_by: scope.user._id }], { session });
     await syncLeadPayments(session, scope, lead, { type: 'payment.recorded', data: { payment_id: payment._id, kind: p.kind, amount: p.amount, status: p.status } });
+    await mailPaymentDue(session, payment, { lead });
     return payment;
   });
 }
@@ -128,6 +130,7 @@ export async function addOrderPayment(scope, orderId, body = {}) {
     const order = await getOrder(scope, orderId, session);
     const [payment] = await Payment.create([{ ...p, tenant_id: scope.tenantId, brand_id: order.brand_id, client_id: order.client_id, lead_id: order.lead_id, order_id: order._id, recorded_by: scope.user._id }], { session });
     await syncOrderPayments(session, scope, order, { type: 'payment.recorded', data: { payment_id: payment._id, kind: p.kind, amount: p.amount, status: p.status } });
+    await mailPaymentDue(session, payment, { order });
     return payment;
   });
 }
@@ -158,11 +161,16 @@ export async function updatePayment(scope, paymentId, body = {}) {
     if (!changes.length) return payment;
     await payment.save({ session });
     const event = { type: payment.status === 'received' && before.status !== 'received' ? 'payment.received' : payment.status === 'refunded' ? 'payment.refunded' : 'payment.updated', changes, data: { payment_id: payment._id } };
+    const statusChanged = before.status !== payment.status;     // "payment due" is mailed once per status, not on every correction
     if (payment.order_id) {
       const { getOrder } = await import('./orders.js');
-      await syncOrderPayments(session, scope, await getOrder(scope, payment.order_id, session), event);
+      const order = await getOrder(scope, payment.order_id, session);
+      await syncOrderPayments(session, scope, order, event);
+      if (statusChanged) await mailPaymentDue(session, payment, { order });
     } else {
-      await syncLeadPayments(session, scope, await getLead(scope, payment.lead_id, session), event);
+      const lead = await getLead(scope, payment.lead_id, session);
+      await syncLeadPayments(session, scope, lead, event);
+      if (statusChanged) await mailPaymentDue(session, payment, { lead });
     }
     return payment;
   });

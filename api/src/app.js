@@ -5,6 +5,7 @@ import { errorHandler, notFound } from './lib/errors.js';
 import { authRouter, requireAuth } from './routes/auth.js';
 import { clientsRouter } from './routes/clients.js';
 import { conversationsRouter } from './routes/conversations.js';
+import { enquiriesRouter } from './routes/enquiries.js';
 import { extractionRouter } from './routes/extraction.js';
 import { fulfilmentRouter } from './routes/fulfilment.js';
 import { integrationsRouter } from './routes/integrations.js';
@@ -26,6 +27,7 @@ export function createApp(config) {
     res.status(db ? 200 : 503).json({ ok: db, db: db ? 'up' : 'down' });
   });
   api.use(authRouter);
+  api.use(enquiriesRouter);                          // the landing-page form is open to anyone; its list route checks the login itself
   api.use(requireAuth);
   api.use(orgRouter); 
   api.use(settingsRouter);

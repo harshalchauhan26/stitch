@@ -40,12 +40,13 @@ export function computeGaps(rec, rb, uptoIndex) {
         items.forEach((item, n) => {
           const ctx = { ...base, item };
           if (!conditionHolds(cond, rb.defs, ctx)) return;
-          if (!isFilled(def, valueOf(def, ctx))) add({ ...gap, item_id: item._id, item_label: itemLabel(item, n + 1) });
+          // rule.level is passed so a Yes/No field that is a gate keeps "No" as a gap (see isFilled in lib/fields.js)
+          if (!isFilled(def, valueOf(def, ctx), rule.level)) add({ ...gap, item_id: item._id, item_label: itemLabel(item, n + 1) });
         });
         continue;
       }
       if (!conditionHolds(cond, rb.defs, base)) continue;
-      if (!isFilled(def, valueOf(def, base))) add(gap);
+      if (!isFilled(def, valueOf(def, base), rule.level)) add(gap);
     }
   }
   return [...byKey.values()];

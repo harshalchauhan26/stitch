@@ -5,6 +5,7 @@ import { ORDER_STAGES } from '../lib/constants.js';
 import { badRequest, conflict, notFound } from '../lib/errors.js';
 import { bool, int, oneOf, str } from '../lib/validate.js';
 import { AuditLog, Brand, FieldDef, Lead, RequiredRule } from '../models/index.js';
+import { commitWrite } from './events.js';
 import { pipelineOf, validatePipeline } from './pipeline.js';
 import { actorFor } from './scope.js';
 
@@ -21,10 +22,19 @@ async function brandOr404(scope, brandId, session) {
 /**
  * Replaces the brand's lead pipeline. body.stages: [{ name, type: open|won|lost, from?: old name when renaming }]
  * - a renamed stage keeps its leads and rules; the won and lost stages always map to the new won and lost stages
- * - a removed stage must be empty (move its leads first); its rules move to the nearest stage that is kept
+ * - a removed stage that has leads is refused, unless moveLeadsTo is given: then its leads are moved to that stage in the
+ *   same transaction (one history entry per lead, source "system"). The rules of a removed stage move to the nearest stage that is kept
+ * moveLeadsTo = the NAME of an open stage of the NEW pipeline (a renamed stage is given by its new name). It cannot be a won or
+ * lost stage: those create an order or need a reason, so leads are never pushed into them like this.
  */
-export async function updatePipeline(scope, brandId, input) {
+export async function updatePipeline(scope, brandId, input, moveLeadsTo) {
   const wanted = validatePipeline(input);
+  // Where the leads of a removed stage go. Checked first, so a wrong target is refused even if no stage needs emptying.
+  // (A removed stage can never be the target: removed stages are not in the new pipeline.)
+  const asked = moveLeadsTo === undefined || moveLeadsTo === null || String(moveLeadsTo).trim() === '' ? null : String(moveLeadsTo).trim();
+  const moveTo = asked && wanted.find((s) => s.name.toLowerCase() === asked.toLowerCase());
+  if (asked && !moveTo) throw badRequest(`"${asked}" is not a stage of the new pipeline, so leads cannot be moved there`);
+  if (moveTo && moveTo.type !== 'open') throw badRequest(`Leads cannot be moved into "${moveTo.name}": it is a ${moveTo.type} stage. Pick an open stage`);
   return withTransaction(async (session) => {
     const brand = await brandOr404(scope, brandId, session);
     const old = pipelineOf(brand);
@@ -38,9 +48,11 @@ export async function updatePipeline(scope, brandId, input) {
       }
     }
     const removed = old.open.filter((o) => !rename.has(o));
+    let busy = [];                                       // the removed stages that still have leads: [{ _id: stage, n: how many }]
     if (removed.length) {
-      const busy = await Lead.aggregate([{ $match: { tenant_id: brand.tenant_id, brand_id: brand._id, stage_type: 'open', stage: { $in: removed } } }, { $group: { _id: '$stage', n: { $sum: 1 } } }]).session(session);
-      if (busy.length) throw conflict(`Move these leads before removing their stage: ${busy.map((b) => `${b.n} in ${b._id}`).join(', ')}`, { code: 'stage_not_empty', stages: busy.map((b) => ({ stage: b._id, leads: b.n })) });
+      busy = await Lead.aggregate([{ $match: { tenant_id: brand.tenant_id, brand_id: brand._id, stage_type: 'open', stage: { $in: removed } } }, { $group: { _id: '$stage', n: { $sum: 1 } } }]).session(session);
+      // no target given: refuse, as before
+      if (busy.length && !moveTo) throw conflict(`Move these leads before removing their stage: ${busy.map((b) => `${b.n} in ${b._id}`).join(', ')}`, { code: 'stage_not_empty', stages: busy.map((b) => ({ stage: b._id, leads: b.n })) });
     }
     // rules of a removed stage go to the nearest kept stage before it (or after it, or the first stage)
     const target = (stage) => {
@@ -75,10 +87,26 @@ export async function updatePipeline(scope, brandId, input) {
       await Lead.updateMany({ brand_id: brand._id, stage: tmp(i) }, { $set: { stage: to } }, { session });
       await Lead.updateMany({ brand_id: brand._id, stage_before_lost: tmp(i) }, { $set: { stage_before_lost: to } }, { session });
     }
+    // Move the leads of the removed stages to the chosen stage. This runs AFTER the renames above, so the chosen stage already
+    // has its new name, and the leads of the removed stages still carry their old stage names (the renames did not touch them).
+    // Each lead goes through commitWrite like any other change: version check plus one history entry, written by "system".
+    // The leads' gap counts are recounted by the route right after this transaction commits (services/recount.js).
+    if (busy.length) {
+      const stuck = await Lead.find({ tenant_id: brand.tenant_id, brand_id: brand._id, stage_type: 'open', stage: { $in: removed } }).session(session).lean();
+      for (const lead of stuck) {
+        await commitWrite(session, scope, 'lead', lead, { $set: { stage: moveTo.name, stage_changed_at: new Date() } }, {
+          type: 'stage.moved', source: 'system', changes: [{ field: 'stage', scope: 'lead', old: lead.stage, new: moveTo.name }],
+          reason: `Stage "${lead.stage}" was removed from the pipeline`,
+        });
+      }
+      // a lost lead remembers the stage it would be reopened to: point it at the new stage too
+      await Lead.updateMany({ brand_id: brand._id, stage_before_lost: { $in: removed } }, { $set: { stage_before_lost: moveTo.name } }, { session });
+    }
     const before = old.stages;
     brand.lead_pipeline = pipelineOf({ lead_pipeline: wanted }).stages;
     await brand.save({ session });
-    await AuditLog.create([{ tenant_id: scope.tenantId, actor: actorFor(scope, brand._id), action: 'pipeline.changed', target_type: 'brand', target_id: brand._id, data: { before, after: brand.lead_pipeline } }], { session });
+    const movedNote = busy.length ? { to: moveTo.name, from: busy.map((b) => ({ stage: b._id, leads: b.n })) } : undefined;   // noted in the settings log
+    await AuditLog.create([{ tenant_id: scope.tenantId, actor: actorFor(scope, brand._id), action: 'pipeline.changed', target_type: 'brand', target_id: brand._id, data: { before, after: brand.lead_pipeline, moved: movedNote } }], { session });
     return pipelineOf(brand).stages;
   });
 }
